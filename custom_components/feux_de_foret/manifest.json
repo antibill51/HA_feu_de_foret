@@ -1,0 +1,14 @@
+{
+    "domain": "feux_de_foret",
+    "name": "Feux de forêt (feuxdeforet.fr)",
+    "version": "1.0.0",
+    "documentation": "https://github.com/antibill51/feux-de-foret",
+    "issue_tracker": "https://github.com/antibill51/feux-de-foret/issues",
+    "codeowners": [
+        "@antibill51"
+    ],
+    "config_flow": true,
+    "iot_class": "cloud_polling",
+    "integration_type": "hub",
+    "requirements": []
+}
