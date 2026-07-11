@@ -1,0 +1,40 @@
+{
+    "config": {
+        "step": {
+            "user": {
+                "title": "Feux de forêt — New zone to monitor",
+                "description": "Enter a name, a position and the alert radius for this zone.",
+                "data": {
+                    "name": "Zone name",
+                    "latitude": "Latitude",
+                    "longitude": "Longitude",
+                    "radius_km": "Alert radius (km)",
+                    "scan_interval": "Refresh interval (minutes)",
+                    "enable_persistent_notifications": "Home Assistant notification for each new fire or report",
+                    "enable_telegram_notifications": "Also notify via Telegram",
+                    "telegram_notify_service": "Telegram notify service/entity"
+                }
+            }
+        }
+    },
+    "options": {
+        "step": {
+            "init": {
+                "title": "Options — Feux de forêt",
+                "description": "Notifications for confirmed fires and pending reports (early detection is always on).",
+                "data": {
+                    "name": "Zone name",
+                    "radius_km": "Alert radius (km)",
+                    "scan_interval": "Refresh interval (minutes)",
+                    "enable_persistent_notifications": "Home Assistant notification for each new fire or report",
+                    "notification_max_distance_km": "Max distance to notify (km, 0 = use radius)",
+                    "enable_telegram_notifications": "Also notify via Telegram",
+                    "telegram_notify_service": "Telegram notify service/entity"
+                }
+            }
+        },
+        "error": {
+            "telegram_service_required": "Enter a Telegram notify target or disable this option."
+        }
+    }
+}

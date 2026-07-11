@@ -1,0 +1,40 @@
+{
+    "config": {
+        "step": {
+            "user": {
+                "title": "Feux de forêt — Nouvelle zone à surveiller",
+                "description": "Renseignez un nom, une position et le rayon d'alerte de cette zone.",
+                "data": {
+                    "name": "Nom de la zone",
+                    "latitude": "Latitude",
+                    "longitude": "Longitude",
+                    "radius_km": "Rayon d'alerte (km)",
+                    "scan_interval": "Intervalle de rafraîchissement (minutes)",
+                    "enable_persistent_notifications": "Notification Home Assistant à chaque nouveau feu ou signalement",
+                    "enable_telegram_notifications": "Notifier aussi via Telegram",
+                    "telegram_notify_service": "Service/entité notify Telegram"
+                }
+            }
+        }
+    },
+    "options": {
+        "step": {
+            "init": {
+                "title": "Options — Feux de forêt",
+                "description": "Notifications pour les feux confirmés et signalements en attente (détection anticipée toujours active).",
+                "data": {
+                    "name": "Nom de la zone",
+                    "radius_km": "Rayon d'alerte (km)",
+                    "scan_interval": "Intervalle de rafraîchissement (minutes)",
+                    "enable_persistent_notifications": "Notification Home Assistant à chaque nouveau feu ou signalement",
+                    "notification_max_distance_km": "Distance max pour notifier (km, 0 = utiliser le rayon)",
+                    "enable_telegram_notifications": "Notifier aussi via Telegram",
+                    "telegram_notify_service": "Service/entité notify Telegram"
+                }
+            }
+        },
+        "error": {
+            "telegram_service_required": "Indiquez un service Telegram ou désactivez cette option."
+        }
+    }
+}

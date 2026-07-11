@@ -1,0 +1,151 @@
+# ==============================================================================
+# Feux de forêt — Tableau de bord Lovelace
+# ==============================================================================
+# Exemple de tableau de bord prêt à l'emploi pour l'intégration Feux de forêt.
+# Aucune carte custom/HACS n'est nécessaire.
+#
+# Installation :
+#   - Nouveau tableau de bord : Paramètres > Tableaux de bord > Ajouter >
+#     "Nouveau tableau de bord depuis zéro" > Modifier en YAML > coller ce fichier.
+#   - Carte par carte : Ajouter une carte > Manuelle > coller un bloc "- type: ...".
+#
+# Si vous avez renommé votre zone, remplacez simplement le préfixe des
+# entity_id dans les cartes ci-dessous.
+  - title: Feux de forêt
+    path: feux-de-foret
+    icon: mdi:fire
+
+    cards:
+      # ------------------------------------------------------------------
+      # 1. Carte géographique nationale
+      # ------------------------------------------------------------------
+      - type: map
+        title: Tous les feux en cours
+        geo_location_sources:
+          - feux_de_foret
+        default_zoom: 6
+        theme_mode: auto
+        auto_fit: true
+
+      # ------------------------------------------------------------------
+      # 2. Résumé rapide
+      # ------------------------------------------------------------------
+      - type: glance
+        title: État actuel
+        show_name: true
+        show_icon: true
+        show_state: true
+        state_color: true
+        columns: 3
+        entities:
+          - entity: sensor.feux_de_foret_feux_confirmes
+            name: Confirmés
+          - entity: sensor.feux_de_foret_signalements_en_attente
+            name: En attente
+          - entity: binary_sensor.feux_de_foret_alerte_feu_de_foret_a_proximite
+            name: Alerte secteur
+          - entity: sensor.feux_de_foret_feux_en_cours_a_proximite
+            name: Dans le secteur
+          - entity: sensor.feux_de_foret_distance_du_feu_le_plus_proche
+            name: Plus proche
+      #    - entity: sensor.feux_de_foret_derniere_actualisation_des_donnees
+      #      name: Dernière actualisation
+
+      # ------------------------------------------------------------------
+      # 3. Feux autour de vous
+      #    Affichée seulement si des feux sont présents dans le secteur.
+      # ------------------------------------------------------------------
+      - type: conditional
+        conditions:
+          - condition: numeric_state
+            entity: sensor.feux_de_foret_feux_en_cours_a_proximite
+            above: 0
+        card:
+          type: markdown
+          title: Feux dans votre secteur
+          content: |
+            {% set fires = state_attr('sensor.feux_de_foret_feux_en_cours_a_proximite', 'fires') | default([]) %}
+            {% for f in fires | sort(attribute='distance_km') %}
+            - {{ '🔥' if f.confirme else '⚠️' }} **{{ f.commune_departement or f.commune }}** — {{ f.etat_label }} — {{ f.distance_km }} km — signalé {{ f.signale_depuis or 'date inconnue' }}{% if f.commune_url %} [→ Fiche complète]({{ f.commune_url }}){% endif %}
+
+            {% endfor %}
+
+      # ------------------------------------------------------------------
+      # 4. Tous les feux, triés par distance
+      #    Affichée seulement si au moins un feu ou signalement est présent.
+      # ------------------------------------------------------------------
+      - type: conditional
+        conditions:
+          - condition: or
+            conditions:
+              - condition: numeric_state
+                entity: sensor.feux_de_foret_feux_confirmes
+                above: 0
+              - condition: numeric_state
+                entity: sensor.feux_de_foret_signalements_en_attente
+                above: 0
+        card:
+          type: markdown
+          title: Tous les feux en cours (Distance)
+          content: |
+            {% set ns = namespace(items=[]) %}
+            {% for f in states.geo_location | selectattr('attributes.source', 'eq', 'feux_de_foret') %}
+            {% set ns.items = ns.items + [{
+              'commune': f.attributes.get('commune_departement') or f.attributes.get('commune') or 'Zone inconnue',
+              'etat_label': f.attributes.get('etat_label'),
+              'distance': f.state | float(0),
+              'url': f.attributes.get('url'),
+              'signale_depuis': f.attributes.get('signale_depuis'),
+              'confirme': f.attributes.get('confirme')
+            }] %}
+            {% endfor %}
+            {% for f in ns.items | sort(attribute='distance') %}
+            - {{ '🔥' if f.confirme else '⚠️' }} **{{ f.commune }}** — {{ f.etat_label }} — {{ f.distance | round(1) }} km — signalé {{ f.signale_depuis or 'date inconnue' }}{% if f.url %} [→ Fiche complète]({{ f.url }}){% endif %}
+
+            {% endfor %}
+
+      # ------------------------------------------------------------------
+      # 5. Tous les feux, les plus récents en premier
+      #    Affichée seulement si au moins un feu ou signalement est présent.
+      # ------------------------------------------------------------------
+      - type: conditional
+        conditions:
+          - condition: or
+            conditions:
+              - condition: numeric_state
+                entity: sensor.feux_de_foret_feux_confirmes
+                above: 0
+              - condition: numeric_state
+                entity: sensor.feux_de_foret_signalements_en_attente
+                above: 0
+        card:
+          type: markdown
+          title: Tous les feux en cours (Chronologique)
+          content: |
+            {% set ns = namespace(items=[]) %}
+            {% for f in states.geo_location | selectattr('attributes.source', 'eq', 'feux_de_foret') %}
+            {% set signale_le = f.attributes.get('signale_le') %}
+            {% set ns.items = ns.items + [{
+              'commune': f.attributes.get('commune_departement') or f.attributes.get('commune') or 'Zone inconnue',
+              'etat_label': f.attributes.get('etat_label'),
+              'distance': f.state | float(0),
+              'url': f.attributes.get('url'),
+              'signale_depuis': f.attributes.get('signale_depuis'),
+              'signale_le': signale_le if signale_le else '0001-01-01T00:00:00+00:00',
+              'confirme': f.attributes.get('confirme')
+            }] %}
+            {% endfor %}
+            {% for f in ns.items | sort(attribute='signale_le', reverse=true) %}
+            - {{ '🔥' if f.confirme else '⚠️' }} **{{ f.commune }}** — {{ f.etat_label }} — {{ f.distance | round(1) }} km — signalé {{ f.signale_depuis or 'date inconnue' }}{% if f.url %} [→ Fiche complète]({{ f.url }}){% endif %}
+
+            {% endfor %}
+
+      # ------------------------------------------------------------------
+      # 6. Note
+      # ------------------------------------------------------------------
+      - type: markdown
+        content: >
+          ℹ️ **À propos des liens "Fiche complète"** : feuxdeforet.fr n'attribue
+          un lien de fiche public définitif qu'une fois un feu confirmé/publié.
+          Certains signalements en attente de confirmation (⚠️) n'ont donc
+          temporairement aucun lien affiché ci-dessus — ce n'est pas une erreur.
