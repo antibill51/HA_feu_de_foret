@@ -1,14 +1,15 @@
 {
-    "domain": "feux_de_foret",
-    "name": "Feux de forêt (feuxdeforet.fr)",
-    "version": "1.0.0",
-    "documentation": "https://github.com/antibill51/feux-de-foret",
-    "issue_tracker": "https://github.com/antibill51/feux-de-foret/issues",
-    "codeowners": [
-        "@antibill51"
-    ],
-    "config_flow": true,
-    "iot_class": "cloud_polling",
-    "integration_type": "hub",
-    "requirements": []
+  "domain": "feux_de_foret",
+  "name": "Feux de forêt (feuxdeforet.fr)",
+  "codeowners": ["@antibill51"],
+  "config_flow": true,
+  "documentation": "https://github.com/antibill51/HA_feu_de_foret",
+  "iot_class": "cloud_polling",
+  "integration_type": "hub",
+  "issue_tracker": "https://github.com/antibill51/HA_feu_de_foret/issues",
+  "requirements": [],
+  "render_readme": true,
+  "version": "1.0.1",
+  "homeassistant": "2026.7.0"
+
 }

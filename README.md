@@ -4,10 +4,13 @@ Intégration non officielle pour suivre les feux de forêt en France à partir d
 
 ## Version
 
-- Version actuelle : 1.0.0
+- Version actuelle : 1.0.1
 - Première version déposée : 1.0.0
 
 ## Changelog
+
+### 1.0.1 - 2026-07-11
+- Corrections mineures.
 
 ### 1.0.0 - 2026-07-11
 - Première publication de l’intégration.
