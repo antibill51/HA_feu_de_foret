@@ -1,6 +1,5 @@
 {
-    "name": "Feux de forêt (feuxdeforet.fr)",
-    "render_readme": true,
-    "iot_class": "cloud_polling",
-    "homeassistant": "2024.1.0"
+  "name": "Feux de forêt (feuxdeforet.fr)",
+  "render_readme": true,
+  "homeassistant": "2024.1.0"
 }
