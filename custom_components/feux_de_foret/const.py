@@ -11,6 +11,7 @@ CONF_ENABLE_PERSISTENT_NOTIFICATIONS = "enable_persistent_notifications"
 CONF_ENABLE_TELEGRAM_NOTIFICATIONS = "enable_telegram_notifications"
 CONF_TELEGRAM_NOTIFY_SERVICE = "telegram_notify_service"
 CONF_NOTIFICATION_MAX_DISTANCE_KM = "notification_max_distance_km"
+CONF_DEBUG_LOGGING = "debug_logging"
 
 DEFAULT_NAME = "Feux de forêt"
 DEFAULT_RADIUS_KM = 30
@@ -19,6 +20,7 @@ DEFAULT_ENABLE_PERSISTENT_NOTIFICATIONS = False
 DEFAULT_ENABLE_TELEGRAM_NOTIFICATIONS = False
 DEFAULT_TELEGRAM_NOTIFY_SERVICE = ""
 DEFAULT_NOTIFICATION_MAX_DISTANCE_KM = 0
+DEFAULT_DEBUG_LOGGING = False
 
 GEOJSON_URL = "https://feuxdeforet.fr/fdf/cartographie/geojson?scope=web"
 RESOLVE_URL = "https://feuxdeforet.fr/api/resolve"
@@ -43,7 +45,7 @@ BASE_URL = "https://feuxdeforet.fr"
 
 HTTP_USER_AGENT = (
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
-    "(KHTML, like Gecko) Chrome/120.0 Safari/537.36"
+    "(KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36"
 )
 
 MANUFACTURER = "feuxdeforet.fr"

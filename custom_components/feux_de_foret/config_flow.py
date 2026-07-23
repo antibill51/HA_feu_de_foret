@@ -11,10 +11,10 @@ from homeassistant.helpers import selector
 from .const import (
     DOMAIN, CONF_NAME, CONF_RADIUS, CONF_SCAN_INTERVAL,
     CONF_ENABLE_PERSISTENT_NOTIFICATIONS, CONF_ENABLE_TELEGRAM_NOTIFICATIONS,
-    CONF_TELEGRAM_NOTIFY_SERVICE,
+    CONF_TELEGRAM_NOTIFY_SERVICE, CONF_DEBUG_LOGGING, CONF_NOTIFICATION_MAX_DISTANCE_KM,
     DEFAULT_NAME, DEFAULT_RADIUS_KM, DEFAULT_SCAN_INTERVAL,
     DEFAULT_ENABLE_PERSISTENT_NOTIFICATIONS, DEFAULT_ENABLE_TELEGRAM_NOTIFICATIONS,
-    DEFAULT_TELEGRAM_NOTIFY_SERVICE,
+    DEFAULT_TELEGRAM_NOTIFY_SERVICE, DEFAULT_DEBUG_LOGGING, DEFAULT_NOTIFICATION_MAX_DISTANCE_KM,
 )
 
 
@@ -51,6 +51,7 @@ class FeuxDeForetConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 default=DEFAULT_ENABLE_TELEGRAM_NOTIFICATIONS): bool,
             vol.Optional(CONF_TELEGRAM_NOTIFY_SERVICE,
                 default=DEFAULT_TELEGRAM_NOTIFY_SERVICE): str,
+            vol.Required(CONF_DEBUG_LOGGING, default=DEFAULT_DEBUG_LOGGING): bool,
         })
         return self.async_show_form(step_id="user", data_schema=schema, errors=errors)
 
@@ -76,6 +77,7 @@ class FeuxDeForetOptionsFlow(config_entries.OptionsFlow):
         current_radius = defaults.get(CONF_RADIUS, DEFAULT_RADIUS_KM)
         current_interval = defaults.get(CONF_SCAN_INTERVAL, DEFAULT_SCAN_INTERVAL)
         current_name = defaults.get(CONF_NAME, DEFAULT_NAME)
+        current_max_distance = defaults.get(CONF_NOTIFICATION_MAX_DISTANCE_KM, DEFAULT_NOTIFICATION_MAX_DISTANCE_KM)
 
         schema = vol.Schema({
             vol.Required(CONF_NAME, default=current_name): str,
@@ -89,9 +91,15 @@ class FeuxDeForetOptionsFlow(config_entries.OptionsFlow):
             ),
             vol.Required(CONF_ENABLE_PERSISTENT_NOTIFICATIONS,
                 default=defaults.get(CONF_ENABLE_PERSISTENT_NOTIFICATIONS, DEFAULT_ENABLE_PERSISTENT_NOTIFICATIONS)): bool,
+            vol.Optional(CONF_NOTIFICATION_MAX_DISTANCE_KM, default=current_max_distance): selector.NumberSelector(
+                selector.NumberSelectorConfig(min=0, max=500, step=1,
+                    mode=selector.NumberSelectorMode.SLIDER, unit_of_measurement="km")
+            ),
             vol.Required(CONF_ENABLE_TELEGRAM_NOTIFICATIONS,
                 default=defaults.get(CONF_ENABLE_TELEGRAM_NOTIFICATIONS, DEFAULT_ENABLE_TELEGRAM_NOTIFICATIONS)): bool,
             vol.Optional(CONF_TELEGRAM_NOTIFY_SERVICE,
                 default=defaults.get(CONF_TELEGRAM_NOTIFY_SERVICE, DEFAULT_TELEGRAM_NOTIFY_SERVICE)): str,
+            vol.Required(CONF_DEBUG_LOGGING,
+                default=defaults.get(CONF_DEBUG_LOGGING, DEFAULT_DEBUG_LOGGING)): bool,
         })
         return self.async_show_form(step_id="init", data_schema=schema, errors=errors)

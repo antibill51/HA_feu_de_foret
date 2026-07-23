@@ -12,26 +12,25 @@ from homeassistant.helpers.storage import Store
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 from homeassistant.util import dt as dt_util
 from homeassistant.util.location import distance
-import aiohttp
-import async_timeout
 
 from .const import (
     DOMAIN, GEOJSON_URL, RECENT_SIGNALEMENTS_URL, DEFAULT_RECENT_PER_PAGE,
     CONF_NAME, CONF_RADIUS, CONF_LATITUDE, CONF_LONGITUDE, CONF_SCAN_INTERVAL,
     CONF_ENABLE_PERSISTENT_NOTIFICATIONS, CONF_ENABLE_TELEGRAM_NOTIFICATIONS,
-    CONF_TELEGRAM_NOTIFY_SERVICE,
+    CONF_TELEGRAM_NOTIFY_SERVICE, CONF_DEBUG_LOGGING, CONF_NOTIFICATION_MAX_DISTANCE_KM,
     DEFAULT_NAME, DEFAULT_RADIUS_KM, DEFAULT_SCAN_INTERVAL,
     DEFAULT_ENABLE_PERSISTENT_NOTIFICATIONS, DEFAULT_ENABLE_TELEGRAM_NOTIFICATIONS,
-    DEFAULT_TELEGRAM_NOTIFY_SERVICE,
+    DEFAULT_TELEGRAM_NOTIFY_SERVICE, DEFAULT_DEBUG_LOGGING, DEFAULT_NOTIFICATION_MAX_DISTANCE_KM,
     ONGOING_STATUTS, PROBABLE_STATUTS, ONGOING_ETATS, ETAT_LABELS,
     STATUT_PROBABLE_LABEL, STATUT_EARLY_LABEL,
 )
-from .utils import fetch_recent_signalements, extract_point_from_feature
+from .utils import fetch_recent_signalements, extract_point_from_feature, async_fetch_json
 
 _LOGGER = logging.getLogger(__name__)
 PLATFORMS = ["geo_location", "sensor", "binary_sensor"]
 STORAGE_VERSION = 1
 STORAGE_KEY_PREFIX = f"{DOMAIN}/fire_detection_dates"
+SETUP_LOCK_KEY = f"{DOMAIN}_setup_in_progress"
 
 
 def _is_confirmed(props):
@@ -48,6 +47,14 @@ def _zone_name(entry):
 
 def _title_for(entry, radius):
     return f"{_zone_name(entry)} ({radius} km)"
+
+
+def _apply_debug_logging(entry: ConfigEntry) -> None:
+    debug_enabled = entry.options.get(CONF_DEBUG_LOGGING, entry.data.get(CONF_DEBUG_LOGGING, DEFAULT_DEBUG_LOGGING))
+    level = logging.DEBUG if debug_enabled else logging.NOTSET
+    logging.getLogger("custom_components.feux_de_foret").setLevel(level)
+    if debug_enabled:
+        _LOGGER.debug("Mode debug activé pour l'entrée %s", entry.entry_id)
 
 
 def _serialize_detection_dates(detection_dates):
@@ -87,7 +94,6 @@ async def _seed_detection_dates(coordinator, features):
 
 
 def _merge_early_features(main_features, early_features):
-    """La détection anticipée est toujours active : fusionne tous les signalements récents, sans filtre de distance."""
     if not early_features:
         return main_features
 
@@ -109,52 +115,67 @@ def _merge_early_features(main_features, early_features):
 
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
-    current_radius = entry.options.get(CONF_RADIUS, entry.data.get(CONF_RADIUS, DEFAULT_RADIUS_KM))
-    expected_title = _title_for(entry, current_radius)
-    if entry.title != expected_title:
-        hass.config_entries.async_update_entry(entry, title=expected_title)
+    hass.data.setdefault(SETUP_LOCK_KEY, set())
+    if entry.entry_id in hass.data[SETUP_LOCK_KEY]:
+        _LOGGER.warning(
+            "Setup déjà en cours pour l'entrée %s, appel ignoré (double déclenchement détecté)",
+            entry.entry_id,
+        )
+        return True
+    hass.data[SETUP_LOCK_KEY].add(entry.entry_id)
 
-    session = async_get_clientsession(hass)
-    scan_minutes = entry.options.get(CONF_SCAN_INTERVAL, DEFAULT_SCAN_INTERVAL)
+    try:
+        _apply_debug_logging(entry)
 
-    async def _async_update_data():
-        try:
-            async with async_timeout.timeout(15):
-                async with session.get(GEOJSON_URL) as resp:
-                    if resp.status != 200:
-                        raise UpdateFailed(f"Erreur HTTP {resp.status}")
-                    payload = await resp.json(content_type=None)
-                    features = payload.get("data", {}).get("features", [])
+        current_radius = entry.options.get(CONF_RADIUS, entry.data.get(CONF_RADIUS, DEFAULT_RADIUS_KM))
+        expected_title = _title_for(entry, current_radius)
+        if entry.title != expected_title:
+            hass.config_entries.async_update_entry(entry, title=expected_title)
+
+        scan_minutes = entry.options.get(CONF_SCAN_INTERVAL, DEFAULT_SCAN_INTERVAL)
+
+        async def _async_update_data():
+            session = async_get_clientsession(hass)
+            payload = await async_fetch_json(session, GEOJSON_URL, 15)
+            if not payload:
+                raise UpdateFailed("Erreur de connexion à feuxdeforet.fr : aucune donnée reçue")
+
+            features = payload.get("data", {}).get("features", [])
+            _LOGGER.debug("GeoJSON principal : %d features reçues", len(features))
 
             early_features = await fetch_recent_signalements(session, RECENT_SIGNALEMENTS_URL, DEFAULT_RECENT_PER_PAGE)
+            _LOGGER.debug("Signalements récents (anticipés) : %d reçus", len(early_features))
+
             features = _merge_early_features(features, early_features)
+            _LOGGER.debug("Total après fusion : %d features", len(features))
+
             await _seed_detection_dates(coordinator, features)
 
             coordinator.last_fetch_success = dt_util.utcnow()
             await _async_notify_new_fires(hass, entry, coordinator, features)
             return features
-        except (aiohttp.ClientError, TimeoutError) as err:
-            raise UpdateFailed(f"Erreur de connexion à feuxdeforet.fr : {err}") from err
 
-    coordinator = DataUpdateCoordinator(
-        hass, _LOGGER, name=f"{DOMAIN}_{entry.entry_id}",
-        update_method=_async_update_data, update_interval=timedelta(minutes=scan_minutes),
-    )
-    coordinator.last_fetch_success = None
-    coordinator.fire_details = {}
-    coordinator.commune_cache = {}
-    coordinator.notified_fire_ids = set()
-    coordinator._detection_store = Store(hass, STORAGE_VERSION, f"{STORAGE_KEY_PREFIX}/{entry.entry_id}")
-    coordinator.fire_detection_dates = await _async_load_detection_dates(coordinator._detection_store)
+        coordinator = DataUpdateCoordinator(
+            hass, _LOGGER, name=f"{DOMAIN}_{entry.entry_id}",
+            update_method=_async_update_data, update_interval=timedelta(minutes=scan_minutes),
+        )
+        coordinator.last_fetch_success = None
+        coordinator.fire_details = {}
+        coordinator.commune_cache = {}
+        coordinator.notified_fire_ids = set()
+        coordinator._detection_store = Store(hass, STORAGE_VERSION, f"{STORAGE_KEY_PREFIX}/{entry.entry_id}")
+        coordinator.fire_detection_dates = await _async_load_detection_dates(coordinator._detection_store)
 
-    await coordinator.async_config_entry_first_refresh()
+        await coordinator.async_config_entry_first_refresh()
 
-    hass.data.setdefault(DOMAIN, {})
-    hass.data[DOMAIN][entry.entry_id] = coordinator
+        hass.data.setdefault(DOMAIN, {})
+        hass.data[DOMAIN][entry.entry_id] = coordinator
 
-    await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
-    entry.async_on_unload(entry.add_update_listener(_async_update_listener))
-    return True
+        await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
+        entry.async_on_unload(entry.add_update_listener(_async_update_listener))
+        return True
+    finally:
+        hass.data[SETUP_LOCK_KEY].discard(entry.entry_id)
 
 
 async def _async_notify_new_fires(hass, entry, coordinator, features):
@@ -166,7 +187,8 @@ async def _async_notify_new_fires(hass, entry, coordinator, features):
     home_lat = entry.data.get(CONF_LATITUDE)
     home_lng = entry.data.get(CONF_LONGITUDE)
     radius_km = entry.options.get(CONF_RADIUS, entry.data.get(CONF_RADIUS, DEFAULT_RADIUS_KM))
-    threshold_km = radius_km
+    max_distance = entry.options.get(CONF_NOTIFICATION_MAX_DISTANCE_KM, DEFAULT_NOTIFICATION_MAX_DISTANCE_KM)
+    threshold_km = max_distance if max_distance and max_distance > 0 else radius_km
 
     from .utils import commune_from_url, department_from_url, commune_with_department, full_url
 
@@ -215,12 +237,13 @@ async def _async_notify_new_fires(hass, entry, coordinator, features):
         if url:
             message += f"\n{url}"
 
+        _LOGGER.debug("Notification déclenchée pour %s (%s) : %s", fire_id, prefix, message)
+
         if persistent_enabled:
             persistent_notification.async_create(
                 hass, message, title=f"{prefix} — {zone_name}",
                 notification_id=f"{DOMAIN}_{entry.entry_id}_{fire_id}",
             )
-
         if telegram_enabled:
             await _async_send_telegram(hass, entry, coordinator, message, zone_name, pending, is_early)
 
@@ -268,6 +291,8 @@ async def _async_send_telegram(hass, entry, coordinator, message, zone_name, pen
 
 
 async def _async_update_listener(hass: HomeAssistant, entry: ConfigEntry) -> None:
+    _apply_debug_logging(entry)
+
     new_radius = entry.options.get(CONF_RADIUS, entry.data.get(CONF_RADIUS, DEFAULT_RADIUS_KM))
     new_title = _title_for(entry, new_radius)
     if entry.title != new_title:
