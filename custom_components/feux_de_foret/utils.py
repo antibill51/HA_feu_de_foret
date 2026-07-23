@@ -1,6 +1,7 @@
 """Shared helpers for Feux de forêt integration."""
 from __future__ import annotations
 
+import asyncio
 import logging
 from datetime import datetime, timezone
 from urllib.parse import quote
@@ -44,14 +45,7 @@ def department_from_url(url):
 
 
 def _extract_department_code(value):
-    """Normalise une valeur de département en un code numérique (ou 2A/2B pour la Corse).
-
-    Les différentes sources de données (API feuxdeforet.fr, BAN, Nominatim, URL) ne renvoient
-    pas toutes la même chose : certaines donnent directement un numéro ("83"), d'autres un nom
-    de région complet ("Bourgogne-Franche-Comté"). On ne garde que les valeurs déjà numériques
-    (ou 2A/2B) ici ; un nom de région est ignoré car il ne permet pas de déduire un numéro de
-    département fiable.
-    """
+    """Normalise une valeur de département en un code numérique (ou 2A/2B pour la Corse)."""
     if not value:
         return None
     text = str(value).strip().upper()
@@ -68,14 +62,7 @@ def _extract_department_code(value):
 
 
 def normalize_department(value, url=None):
-    """Retourne un numéro de département fiable, quelle que soit la source d'origine.
-
-    Tente d'abord d'extraire un code numérique de la valeur fournie (ex. par l'API de détails
-    feuxdeforet.fr ou un géocodeur). Si cette valeur est en réalité un nom de région texte
-    (ex. "Auvergne-Rhône-Alpes"), on se rabat sur le numéro encodé dans l'URL du signalement,
-    qui est toujours numérique sur feuxdeforet.fr. Ainsi, tous les feux affichent un
-    département sous la même forme numérique, jamais un mélange chiffres/texte.
-    """
+    """Retourne un numéro de département fiable, quelle que soit la source d'origine."""
     code = _extract_department_code(value)
     if code:
         return code
@@ -117,6 +104,14 @@ def extract_point(geometry):
         return None, None
 
     gtype = geometry.get("type")
+
+    if gtype == "GeometryCollection":
+        for sub_geom in geometry.get("geometries", []):
+            lat, lng = extract_point(sub_geom)
+            if lat is not None:
+                return lat, lng
+        return None, None
+
     coords = geometry.get("coordinates")
     if not coords:
         return None, None
@@ -143,12 +138,6 @@ def extract_point(geometry):
     if gtype == "MultiPolygon":
         ring = coords[0][0] if coords and coords[0] else []
         return _centroid_of_ring(ring)
-
-    if gtype == "GeometryCollection":
-        for sub_geom in geometry.get("geometries", []):
-            lat, lng = extract_point(sub_geom)
-            if lat is not None:
-                return lat, lng
 
     return None, None
 
@@ -214,20 +203,13 @@ async def _ban_reverse_request(session, lat, lng, geocode_type=None):
 
 
 def _department_code_from_postcode(postcode):
-    """Convertit un code postal français en numéro de département à 2 (ou 3) chiffres.
-
-    Nominatim ne renvoie que le nom de la région (ex. "Bourgogne-Franche-Comté"), pas le
-    numéro de département attendu par le reste de l'intégration. Le code postal est en
-    revanche fiable pour retrouver ce numéro, y compris pour la Corse (2A/2B) et les DOM
-    (codes à 3 chiffres commençant par 97/98).
-    """
+    """Convertit un code postal français en numéro de département à 2 (ou 3) chiffres."""
     if not postcode:
         return None
     digits = "".join(ch for ch in str(postcode) if ch.isdigit())
     if len(digits) < 2:
         return None
     if digits[:2] == "20":
-        # Corse : 201xx-desert à 20189 = 2A, le reste = 2B (approximation usuelle).
         try:
             code5 = int(digits[:5]) if len(digits) >= 5 else None
         except ValueError:
@@ -262,9 +244,6 @@ async def _nominatim_reverse_request(session, lat, lng):
         address.get("city") or address.get("town") or address.get("village")
         or address.get("municipality") or address.get("county")
     )
-    # On privilégie systématiquement le numéro de département (issu du code postal) plutôt
-    # que le nom de région renvoyé par Nominatim (address.state), pour rester cohérent avec
-    # le format numérique utilisé partout ailleurs dans l'intégration (BAN, URLs, etc.).
     dept = _department_code_from_postcode(address.get("postcode"))
     return commune, dept
 
@@ -282,10 +261,6 @@ async def reverse_geocode_commune(session, lat, lng):
     if features:
         props = features[0].get("properties", {})
         commune = props.get("city") or props.get("label")
-        # La BAN encode le code postal complet dans "context" (ex. "83, Var, Provence-Alpes-Côte
-        # d'Azur"), dont les 2 premiers chiffres sont le numéro de département. C'est déjà
-        # numérique ici, mais on repasse par normalize_department pour rester cohérent avec les
-        # autres sources et gérer proprement le cas 2A/2B.
         context = props.get("context", "")
         dept_raw = context.split(",")[0].strip() if context else None
         dept = normalize_department(dept_raw)
@@ -304,7 +279,8 @@ def normalize_recent_signalement(item):
         item.get("latitude") or item.get("lat") or item.get("y") or position.get("lat")
     )
     longitude = _float(
-        item.get("longitude") or item.get("lng") or item.get("lon") or item.get("x") or position.get("lng") or position.get("lon")
+        item.get("longitude") or item.get("lng") or item.get("lon") or item.get("x")
+        or position.get("lng") or position.get("lon")
     )
     if latitude is None or longitude is None:
         return None
@@ -354,24 +330,88 @@ async def fetch_recent_signalements(session, base_url, per_page):
     return features
 
 
+async def async_fetch_json(session, url, timeout=15, retries=3):
+    """Récupère un JSON via aiohttp, avec réessais espacés en cas d'échec transitoire (5xx).
+
+    Utilise la même session aiohttp partagée que le reste de l'intégration (fetch_fire_details,
+    fetch_recent_signalements), qui n'a jamais déclenché de blocage anti-bot côté
+    feuxdeforet.fr. Remplace l'ancien sync_fetch_json basé sur `requests`, dont l'empreinte
+    TLS/réseau différente déclenchait des HTTP 403 intermittents.
+    """
+    if session is None:
+        return None
+    last_error = None
+    for attempt in range(1, retries + 1):
+        try:
+            async with session.get(
+                url,
+                headers={
+                    "User-Agent": HTTP_USER_AGENT,
+                    "Accept": "application/json, text/plain, */*",
+                    "Accept-Language": "fr-FR,fr;q=0.9",
+                    "Referer": "https://feuxdeforet.fr/",
+                },
+                timeout=timeout,
+            ) as resp:
+                if resp.status != 200:
+                    _LOGGER.debug(
+                        "async_fetch_json returned HTTP %s for %s (essai %d/%d)",
+                        resp.status, url, attempt, retries,
+                    )
+                    last_error = f"HTTP {resp.status}"
+                    if attempt < retries:
+                        await asyncio.sleep(2 * attempt)
+                    continue
+                return await resp.json(content_type=None)
+        except Exception as err:
+            _LOGGER.debug(
+                "async_fetch_json failed for %s (essai %d/%d): %s",
+                url, attempt, retries, err,
+            )
+            last_error = err
+            if attempt < retries:
+                await asyncio.sleep(2 * attempt)
+    _LOGGER.debug("async_fetch_json : échec définitif pour %s (%s)", url, last_error)
+    return None
+
+
 async def fetch_fire_details(session, url):
+    """Récupère les détails d'un feu, avec un réessai si l'API répond 500/502/503.
+
+    Retourne un tuple (details, status_code). status_code vaut None en cas d'exception réseau
+    (timeout, DNS, etc.), ce qui permet à l'appelant de distinguer un 404 définitif (page
+    supprimée, à ne plus jamais retenter) d'un échec transitoire (à retenter plus tard).
+    """
     empty = {"date": None, "commune": None, "dept": None, "statut_detail": None}
     path = relative_path_from_url(url)
     if not path or session is None:
-        return empty
+        return empty, None
 
     request_url = f"{RESOLVE_URL}?path={quote(path, safe='')}&page=1"
-    try:
-        async with session.get(
-            request_url, headers={"User-Agent": HTTP_USER_AGENT}, timeout=10
-        ) as resp:
-            if resp.status != 200:
-                _LOGGER.debug("resolve endpoint returned %s for %s", resp.status, path)
-                return empty
-            payload = await resp.json(content_type=None)
-    except Exception as err:
-        _LOGGER.debug("Failed to fetch fire details for %s: %s", path, err)
-        return empty
+    payload = None
+    status_code = None
+    for attempt in range(2):
+        try:
+            async with session.get(
+                request_url, headers={"User-Agent": HTTP_USER_AGENT}, timeout=10
+            ) as resp:
+                status_code = resp.status
+                if resp.status in (500, 502, 503) and attempt == 0:
+                    await asyncio.sleep(1.5)
+                    continue
+                if resp.status != 200:
+                    _LOGGER.debug("resolve endpoint returned %s for %s", resp.status, path)
+                    return empty, status_code
+                payload = await resp.json(content_type=None)
+                break
+        except Exception as err:
+            _LOGGER.debug("Failed to fetch fire details for %s: %s", path, err)
+            return empty, None
+    else:
+        return empty, status_code
+
+    if payload is None:
+        return empty, status_code
 
     data = payload.get("data", {})
     date_str = data.get("date")
@@ -389,7 +429,7 @@ async def fetch_fire_details(session, url):
         "commune": data.get("commune") or None,
         "dept": dept,
         "statut_detail": data.get("headlineEtat") or None,
-    }
+    }, status_code
 
 
 def elapsed_since(dt):

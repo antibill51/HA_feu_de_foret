@@ -12,7 +12,8 @@
                     "scan_interval": "Intervalle de rafraîchissement (minutes)",
                     "enable_persistent_notifications": "Notification Home Assistant à chaque nouveau feu ou signalement",
                     "enable_telegram_notifications": "Notifier aussi via Telegram",
-                    "telegram_notify_service": "Service/entité notify Telegram"
+                    "telegram_notify_service": "Service/entité notify Telegram",
+                    "debug_logging": "Activer les logs de débogage détaillés"
                 }
             }
         }
@@ -29,7 +30,8 @@
                     "enable_persistent_notifications": "Notification Home Assistant à chaque nouveau feu ou signalement",
                     "notification_max_distance_km": "Distance max pour notifier (km, 0 = utiliser le rayon)",
                     "enable_telegram_notifications": "Notifier aussi via Telegram",
-                    "telegram_notify_service": "Service/entité notify Telegram"
+                    "telegram_notify_service": "Service/entité notify Telegram",
+                    "debug_logging": "Activer les logs de débogage détaillés"
                 }
             }
         },
