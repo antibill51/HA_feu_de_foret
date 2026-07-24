@@ -14,17 +14,40 @@ from homeassistant.util import dt as dt_util
 from homeassistant.util.location import distance
 
 from .const import (
-    DOMAIN, GEOJSON_URL, RECENT_SIGNALEMENTS_URL, DEFAULT_RECENT_PER_PAGE,
-    CONF_NAME, CONF_RADIUS, CONF_LATITUDE, CONF_LONGITUDE, CONF_SCAN_INTERVAL,
-    CONF_ENABLE_PERSISTENT_NOTIFICATIONS, CONF_ENABLE_TELEGRAM_NOTIFICATIONS,
-    CONF_TELEGRAM_NOTIFY_SERVICE, CONF_DEBUG_LOGGING, CONF_NOTIFICATION_MAX_DISTANCE_KM,
-    DEFAULT_NAME, DEFAULT_RADIUS_KM, DEFAULT_SCAN_INTERVAL,
-    DEFAULT_ENABLE_PERSISTENT_NOTIFICATIONS, DEFAULT_ENABLE_TELEGRAM_NOTIFICATIONS,
-    DEFAULT_TELEGRAM_NOTIFY_SERVICE, DEFAULT_DEBUG_LOGGING, DEFAULT_NOTIFICATION_MAX_DISTANCE_KM,
-    ONGOING_STATUTS, PROBABLE_STATUTS, ONGOING_ETATS, ETAT_LABELS,
-    STATUT_PROBABLE_LABEL, STATUT_EARLY_LABEL,
+    CONF_DEBUG_LOGGING,
+    CONF_ENABLE_PERSISTENT_NOTIFICATIONS,
+    CONF_ENABLE_TELEGRAM_NOTIFICATIONS,
+    CONF_LATITUDE,
+    CONF_LONGITUDE,
+    CONF_NAME,
+    CONF_NOTIFICATION_MAX_DISTANCE_KM,
+    CONF_RADIUS,
+    CONF_SCAN_INTERVAL,
+    CONF_TELEGRAM_NOTIFY_SERVICE,
+    DEFAULT_DEBUG_LOGGING,
+    DEFAULT_ENABLE_PERSISTENT_NOTIFICATIONS,
+    DEFAULT_ENABLE_TELEGRAM_NOTIFICATIONS,
+    DEFAULT_NAME,
+    DEFAULT_NOTIFICATION_MAX_DISTANCE_KM,
+    DEFAULT_RADIUS_KM,
+    DEFAULT_RECENT_PER_PAGE,
+    DEFAULT_SCAN_INTERVAL,
+    DEFAULT_TELEGRAM_NOTIFY_SERVICE,
+    DOMAIN,
+    ETAT_LABELS,
+    GEOJSON_URL,
+    ONGOING_ETATS,
+    ONGOING_STATUTS,
+    PROBABLE_STATUTS,
+    RECENT_SIGNALEMENTS_URL,
+    STATUT_EARLY_LABEL,
+    STATUT_PROBABLE_LABEL,
 )
-from .utils import fetch_recent_signalements, extract_point_from_feature, async_fetch_json
+from .utils import (
+    async_fetch_json,
+    extract_point_from_feature,
+    fetch_recent_signalements,
+)
 
 _LOGGER = logging.getLogger(__name__)
 PLATFORMS = ["geo_location", "sensor", "binary_sensor"]
@@ -190,7 +213,12 @@ async def _async_notify_new_fires(hass, entry, coordinator, features):
     max_distance = entry.options.get(CONF_NOTIFICATION_MAX_DISTANCE_KM, DEFAULT_NOTIFICATION_MAX_DISTANCE_KM)
     threshold_km = max_distance if max_distance and max_distance > 0 else radius_km
 
-    from .utils import commune_from_url, department_from_url, commune_with_department, full_url
+    from .utils import (
+        commune_from_url,
+        commune_with_department,
+        department_from_url,
+        full_url,
+    )
 
     for feature in features:
         props = feature.get("properties", {})
@@ -285,7 +313,7 @@ async def _async_send_telegram(hass, entry, coordinator, message, zone_name, pen
             "comme 'telegram' ou une entité comme 'notify.telegram_bot_chat'."
         )
         _LOGGER.warning("Notification Telegram activée mais %s", coordinator.last_telegram_error)
-    except Exception as err:
+    except Exception as err: # noqa: BLE001
         coordinator.last_telegram_error = str(err)
         _LOGGER.warning("Échec de la notification Telegram : %s", err)
 

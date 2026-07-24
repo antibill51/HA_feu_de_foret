@@ -14,14 +14,26 @@ from homeassistant.util import dt as dt_util
 from homeassistant.util.location import distance
 
 from .const import (
-    DOMAIN, ONGOING_STATUTS, PROBABLE_STATUTS, ONGOING_ETATS,
-    ETAT_LABELS, STATUT_PROBABLE_LABEL, STATUT_EARLY_LABEL,
-    CONF_LATITUDE, CONF_LONGITUDE,
+    CONF_LATITUDE,
+    CONF_LONGITUDE,
+    DOMAIN,
+    ETAT_LABELS,
+    ONGOING_ETATS,
+    ONGOING_STATUTS,
+    PROBABLE_STATUTS,
+    STATUT_EARLY_LABEL,
+    STATUT_PROBABLE_LABEL,
 )
 from .entity import device_info_for
 from .utils import (
-    full_url, commune_from_url, department_from_url, commune_with_department,
-    fetch_fire_details, elapsed_since, extract_point_from_feature, reverse_geocode_commune,
+    commune_from_url,
+    commune_with_department,
+    department_from_url,
+    elapsed_since,
+    extract_point_from_feature,
+    fetch_fire_details,
+    full_url,
+    reverse_geocode_commune,
 )
 
 FIRE_ICON_DATA_URI = (

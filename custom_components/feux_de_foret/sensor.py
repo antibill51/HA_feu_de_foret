@@ -1,7 +1,7 @@
 """Sensor platform: fire counts/distance within a zone, plus diagnostic freshness sensor."""
 from __future__ import annotations
 
-from homeassistant.components.sensor import SensorEntity, SensorDeviceClass
+from homeassistant.components.sensor import SensorDeviceClass, SensorEntity
 from homeassistant.const import EntityCategory
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
@@ -9,12 +9,26 @@ from homeassistant.util import dt as dt_util
 from homeassistant.util.location import distance
 
 from .const import (
-    DOMAIN, ONGOING_STATUTS, PROBABLE_STATUTS, ONGOING_ETATS,
-    CONF_RADIUS, CONF_LATITUDE, CONF_LONGITUDE,
-    ETAT_LABELS, STATUT_PROBABLE_LABEL, STATUT_EARLY_LABEL,
+    CONF_LATITUDE,
+    CONF_LONGITUDE,
+    CONF_RADIUS,
+    DOMAIN,
+    ETAT_LABELS,
+    ONGOING_ETATS,
+    ONGOING_STATUTS,
+    PROBABLE_STATUTS,
+    STATUT_EARLY_LABEL,
+    STATUT_PROBABLE_LABEL,
 )
 from .entity import FeuxDeForetEntity
-from .utils import full_url, commune_from_url, department_from_url, commune_with_department, elapsed_since, extract_point_from_feature
+from .utils import (
+    commune_from_url,
+    commune_with_department,
+    department_from_url,
+    elapsed_since,
+    extract_point_from_feature,
+    full_url,
+)
 
 
 def _is_early(props):
@@ -212,7 +226,7 @@ class FeuxClosestSensor(FeuxBaseSensor):
         )
         if not entries:
             return {}
-        dist, props = entries[0]
+        _dist, props = entries[0]
         fire_id = str(props.get("id"))
         details = self._effective_details_for(fire_id)
         commune = details.get("commune") or commune_from_url(props.get("url"))
