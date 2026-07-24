@@ -6,7 +6,13 @@ import logging
 from datetime import datetime, timezone
 from urllib.parse import quote
 
-from .const import BASE_URL, RESOLVE_URL, HTTP_USER_AGENT, PROBABLE_STATUTS, BAN_REVERSE_URL
+from .const import (
+    BAN_REVERSE_URL,
+    BASE_URL,
+    HTTP_USER_AGENT,
+    PROBABLE_STATUTS,
+    RESOLVE_URL,
+)
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -16,7 +22,7 @@ NOMINATIM_REVERSE_URL = "https://nominatim.openstreetmap.org/reverse"
 def full_url(url):
     if not url:
         return None
-    if url.startswith("http://") or url.startswith("https://"):
+    if url.startswith(("http://", "https://")):
         return url
     return f"{BASE_URL}{url}" if url.startswith("/") else f"{BASE_URL}/{url}"
 
@@ -82,8 +88,7 @@ def commune_with_department(commune, dept):
 def relative_path_from_url(url):
     if not url:
         return None
-    if url.startswith(BASE_URL):
-        url = url[len(BASE_URL):]
+    url = url.removeprefix(BASE_URL)
     if not url.startswith("/"):
         url = f"/{url}"
     if not url.endswith("/"):
@@ -197,7 +202,7 @@ async def _ban_reverse_request(session, lat, lng, geocode_type=None):
                 _LOGGER.debug("BAN reverse geocode (%s) returned HTTP %s", geocode_type or "default", resp.status)
                 return None
             return await resp.json(content_type=None)
-    except Exception as err:
+    except Exception as err: # noqa: BLE001
         _LOGGER.debug("Failed BAN reverse geocode (%s) for %s,%s: %s", geocode_type or "default", lat, lng, err)
         return None
 
@@ -233,7 +238,7 @@ async def _nominatim_reverse_request(session, lat, lng):
                 _LOGGER.debug("Nominatim reverse geocode returned HTTP %s", resp.status)
                 return None, None
             payload = await resp.json(content_type=None)
-    except Exception as err:
+    except Exception as err: # noqa: BLE001
         _LOGGER.debug("Failed Nominatim reverse geocode for %s,%s: %s", lat, lng, err)
         return None, None
 
@@ -312,7 +317,7 @@ async def fetch_recent_signalements(session, base_url, per_page):
                 _LOGGER.debug("signalements/recent returned HTTP %s", resp.status)
                 return []
             payload = await resp.json(content_type=None)
-    except Exception as err:
+    except Exception as err: # noqa: BLE001
         _LOGGER.debug("Failed to fetch signalements/recent: %s", err)
         return []
 
@@ -363,7 +368,7 @@ async def async_fetch_json(session, url, timeout=15, retries=3):
                         await asyncio.sleep(2 * attempt)
                     continue
                 return await resp.json(content_type=None)
-        except Exception as err:
+        except Exception as err: # noqa: BLE001
             _LOGGER.debug(
                 "async_fetch_json failed for %s (essai %d/%d): %s",
                 url, attempt, retries, err,
@@ -404,7 +409,7 @@ async def fetch_fire_details(session, url):
                     return empty, status_code
                 payload = await resp.json(content_type=None)
                 break
-        except Exception as err:
+        except Exception as err: # noqa: BLE001
             _LOGGER.debug("Failed to fetch fire details for %s: %s", path, err)
             return empty, None
     else:

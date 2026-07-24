@@ -1,14 +1,22 @@
 """Binary sensor: alert on/off if a fire (confirmed or pending) is within radius."""
 from __future__ import annotations
 
-from homeassistant.components.binary_sensor import BinarySensorEntity, BinarySensorDeviceClass
+from homeassistant.components.binary_sensor import (
+    BinarySensorDeviceClass,
+    BinarySensorEntity,
+)
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.util.location import distance
 
 from .const import (
-    DOMAIN, ONGOING_STATUTS, ONGOING_ETATS, PROBABLE_STATUTS,
-    CONF_RADIUS, CONF_LATITUDE, CONF_LONGITUDE,
+    CONF_LATITUDE,
+    CONF_LONGITUDE,
+    CONF_RADIUS,
+    DOMAIN,
+    ONGOING_ETATS,
+    ONGOING_STATUTS,
+    PROBABLE_STATUTS,
 )
 from .entity import FeuxDeForetEntity
 from .utils import extract_point_from_feature
