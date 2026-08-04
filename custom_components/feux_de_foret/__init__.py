@@ -24,6 +24,7 @@ from .const import (
     CONF_RADIUS,
     CONF_SCAN_INTERVAL,
     CONF_TELEGRAM_NOTIFY_SERVICE,
+    CONF_UNAVAILABLE_GRACE_MINUTES,
     DEFAULT_DEBUG_LOGGING,
     DEFAULT_ENABLE_PERSISTENT_NOTIFICATIONS,
     DEFAULT_ENABLE_TELEGRAM_NOTIFICATIONS,
@@ -33,6 +34,7 @@ from .const import (
     DEFAULT_RECENT_PER_PAGE,
     DEFAULT_SCAN_INTERVAL,
     DEFAULT_TELEGRAM_NOTIFY_SERVICE,
+    DEFAULT_UNAVAILABLE_GRACE_MINUTES,
     DOMAIN,
     ETAT_LABELS,
     GEOJSON_URL,
@@ -156,11 +158,39 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             hass.config_entries.async_update_entry(entry, title=expected_title)
 
         scan_minutes = entry.options.get(CONF_SCAN_INTERVAL, DEFAULT_SCAN_INTERVAL)
+        grace_minutes = entry.options.get(CONF_UNAVAILABLE_GRACE_MINUTES, DEFAULT_UNAVAILABLE_GRACE_MINUTES)
+        grace_period = timedelta(minutes=grace_minutes)
 
         async def _async_update_data():
             session = async_get_clientsession(hass)
             payload = await async_fetch_json(session, GEOJSON_URL, 15)
             if not payload:
+                # feuxdeforet.fr renvoie fréquemment des erreurs transitoires (500/502/503,
+                # timeout, payload vide). Sans délai de grâce, le moindre hoquet fait basculer
+                # TOUTES les entités liées au coordinator (binary_sensor + sensors) en
+                # "indisponible" simultanément, alors que rien n'a réellement changé.
+                #
+                # Tant qu'on reste dans le délai de grâce depuis le dernier succès, on
+                # réutilise silencieusement les dernières données connues (le coordinator
+                # garde last_update_success=True) et on se contente d'un warning en log.
+                # Passé ce délai, on laisse l'échec remonter normalement : à ce stade, il
+                # s'agit probablement d'une vraie panne prolongée qu'il est légitime de
+                # refléter par un état "indisponible".
+                now = dt_util.utcnow()
+                last_ok = coordinator.last_fetch_success
+                if (
+                    grace_period > timedelta(0)
+                    and last_ok is not None
+                    and (now - last_ok) < grace_period
+                    and coordinator.data is not None
+                ):
+                    _LOGGER.warning(
+                        "Échec de récupération feuxdeforet.fr (aucune donnée reçue) — "
+                        "dernières données conservées (dernier succès il y a %s, "
+                        "délai de grâce %s)",
+                        now - last_ok, grace_period,
+                    )
+                    return coordinator.data
                 raise UpdateFailed("Erreur de connexion à feuxdeforet.fr : aucune donnée reçue")
 
             features = payload.get("data", {}).get("features", [])

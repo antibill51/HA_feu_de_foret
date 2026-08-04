@@ -12,10 +12,18 @@ CONF_ENABLE_TELEGRAM_NOTIFICATIONS = "enable_telegram_notifications"
 CONF_TELEGRAM_NOTIFY_SERVICE = "telegram_notify_service"
 CONF_NOTIFICATION_MAX_DISTANCE_KM = "notification_max_distance_km"
 CONF_DEBUG_LOGGING = "debug_logging"
+CONF_UNAVAILABLE_GRACE_MINUTES = "unavailable_grace_minutes"
 
 DEFAULT_NAME = "Feux de forêt"
 DEFAULT_RADIUS_KM = 30
 DEFAULT_SCAN_INTERVAL = 5
+# Délai pendant lequel on conserve les dernières données connues (sans faire basculer
+# les entités en "indisponible") lorsque feuxdeforet.fr ne répond pas. Le site renvoie
+# fréquemment des erreurs transitoires (500/502/503, ou payload vide) ; sans ce délai,
+# le moindre hoquet fait passer TOUTES les entités liées au coordinator (binary_sensor
+# + sensors) indisponibles simultanément, ce qui est trompeur pour un problème purement
+# passager. 0 = comportement d'origine (bascule immédiate).
+DEFAULT_UNAVAILABLE_GRACE_MINUTES = 15
 DEFAULT_ENABLE_PERSISTENT_NOTIFICATIONS = False
 DEFAULT_ENABLE_TELEGRAM_NOTIFICATIONS = False
 DEFAULT_TELEGRAM_NOTIFY_SERVICE = ""

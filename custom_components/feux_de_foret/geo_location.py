@@ -232,23 +232,51 @@ class FeuxDeForetManager:
                 self._entities[fire_id] = entity
                 new_entities.append(entity)
 
-        stale_ids = set(self._entities.keys()) - current_ids
-        if stale_ids:
-            from homeassistant.helpers import entity_registry as er
-
-            registry = er.async_get(self._hass)
-            for stale_id in stale_ids:
-                entity = self._entities.pop(stale_id)
-                self._details_cache.pop(stale_id, None)
-                self._commune_cache.pop(stale_id, None)
-                self._permanent_failures.discard(stale_id)
-                if entity.entity_id and registry.async_get(entity.entity_id):
-                    registry.async_remove(entity.entity_id)
-                else:
-                    await entity.async_remove(force_remove=True)
+        # Nettoyage des entités disparues du flux, y compris celles devenues orphelines
+        # PENDANT que l'intégration était hors ligne (redémarrage HA, reload d'options...).
+        # On ne peut pas se fier uniquement à self._entities : ce dict est réinitialisé à
+        # chaque (re)démarrage du manager, donc un feu disparu du flux entre deux sessions
+        # n'y a jamais transité et ne serait jamais détecté comme "stale". On compare donc
+        # systématiquement à la vérité terrain : l'entity registry lui-même.
+        await self._async_purge_orphaned_entities(current_ids)
 
         if new_entities:
             self._async_add_entities(new_entities)
+
+    async def _async_purge_orphaned_entities(self, current_ids):
+        """Supprime du registre toute entité geo_location de cette entrée dont le feu
+        n'est plus présent dans le flux actuel — qu'elle ait été suivie en mémoire
+        durant cette session ou non (cas d'un feu disparu pendant que HA était arrêté)."""
+        from homeassistant.helpers import entity_registry as er
+
+        registry = er.async_get(self._hass)
+        prefix = f"{self._entry.entry_id}_fire_"
+        orphaned = 0
+
+        for entity_entry in er.async_entries_for_config_entry(registry, self._entry.entry_id):
+            if entity_entry.domain != "geo_location":
+                continue
+            if not entity_entry.unique_id.startswith(prefix):
+                continue
+
+            fire_id = entity_entry.unique_id[len(prefix):]
+            if fire_id in current_ids:
+                continue
+
+            _LOGGER.debug(
+                "Feu %s absent du flux (orphelin, y compris entre deux sessions) : "
+                "suppression de %s",
+                fire_id, entity_entry.entity_id,
+            )
+            registry.async_remove(entity_entry.entity_id)
+            self._entities.pop(fire_id, None)
+            self._details_cache.pop(fire_id, None)
+            self._commune_cache.pop(fire_id, None)
+            self._permanent_failures.discard(fire_id)
+            orphaned += 1
+
+        if orphaned:
+            _LOGGER.info("%d entité(s) geo_location orpheline(s) supprimée(s)", orphaned)
 
 
 class FeuDeForetLocationEvent(GeolocationEvent):
