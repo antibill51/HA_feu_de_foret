@@ -4,10 +4,42 @@ Intégration non officielle pour suivre les feux de forêt en France à partir d
 
 ## Version
 
-- Version actuelle : 1.1.1
+- Version actuelle : 1.2.0
 - Première version déposée : 1.0.0
 
 ## Changelog
+
+### 1.2.0 - 2026-08-04
+Corrige la suppression des entités orphelines et ajoute un délai de grâce avant indisponibilité
+- Le nettoyage des entités geo_location compare désormais l'entity registry
+  au flux actuel, au lieu de se fier au seul état en mémoire du manager
+  (réinitialisé à chaque redémarrage). Les feux disparus du flux pendant
+  que l'intégration était hors ligne sont maintenant bien supprimés.
+- Ajout de l'option 'unavailable_grace_minutes' (défaut 15 min) : un échec
+  de récupération feuxdeforet.fr transitoire ne fait plus basculer
+  immédiatement toutes les entités (binary_sensor + sensors) en
+  indisponible ; les dernières données connues sont conservées le temps
+  du délai de grâce.
+- MiseCorrige la suppression des entités orphelines et ajoute un délai de grâce avant indisponibilité
+- Le nettoyage des entités geo_location compare désormais l'entity registry
+  au flux actuel, au lieu de se fier au seul état en mémoire du manager
+  (réinitialisé à chaque redémarrage). Les feux disparus du flux pendant
+  que l'intégration était hors ligne sont maintenant bien supprimés.
+- Ajout de l'option 'unavailable_grace_minutes' (défaut 15 min) : un échec
+  de récupération feuxdeforet.fr transitoire ne fait plus basculer
+  immédiatement toutes les entités (binary_sensor + sensors) en
+  indisponible ; les dernières données connues sont conservées le temps
+  du délai de grâce.
+Retire la catégorie diagnostic des geo_location et purge fire_detection_dates/notified_fire_ids
+- Les entités geo_location (les feux) ne sont plus catégorisées en
+  diagnostic : elles sont la donnée principale de l'intégration, pas une
+  information technique interne, et redeviennent visibles dans les
+  tableaux de bord auto-générés (cohérent avec les intégrations
+  geo_location du core HA).
+- Le nettoyage des feux orphelins purge désormais aussi
+  fire_detection_dates (persisté sur disque via le Store) et
+  notified_fire_ids, qui s'accumulaient sans limite sur le flux national.
+Modification de l'exemple lovelace.yaml.
 
 ### 1.1.1 - 2026-07-24
 - Mise à jour du README (changelog, documentation).
