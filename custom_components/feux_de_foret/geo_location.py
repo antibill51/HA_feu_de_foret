@@ -6,7 +6,7 @@ import logging
 from datetime import timedelta
 
 from homeassistant.components.geo_location import GeolocationEvent
-from homeassistant.const import EntityCategory, UnitOfLength
+from homeassistant.const import UnitOfLength
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
@@ -246,12 +246,22 @@ class FeuxDeForetManager:
     async def _async_purge_orphaned_entities(self, current_ids):
         """Supprime du registre toute entité geo_location de cette entrée dont le feu
         n'est plus présent dans le flux actuel — qu'elle ait été suivie en mémoire
-        durant cette session ou non (cas d'un feu disparu pendant que HA était arrêté)."""
+        durant cette session ou non (cas d'un feu disparu pendant que HA était arrêté).
+
+        Purge aussi, pour ces mêmes feux, le cache en mémoire ET les structures qui
+        s'accumulent sans limite sur un flux national (fire_detection_dates, persisté
+        sur disque via le Store, et notified_fire_ids) : sans ça, ces structures ne font
+        que grandir, saison de feux après saison de feux.
+        """
         from homeassistant.helpers import entity_registry as er
 
         registry = er.async_get(self._hass)
         prefix = f"{self._entry.entry_id}_fire_"
         orphaned = 0
+
+        detection_dates = getattr(self._coordinator, "fire_detection_dates", {})
+        notified_ids = getattr(self._coordinator, "notified_fire_ids", set())
+        detection_dates_changed = False
 
         for entity_entry in er.async_entries_for_config_entry(registry, self._entry.entry_id):
             if entity_entry.domain != "geo_location":
@@ -273,10 +283,20 @@ class FeuxDeForetManager:
             self._details_cache.pop(fire_id, None)
             self._commune_cache.pop(fire_id, None)
             self._permanent_failures.discard(fire_id)
+            notified_ids.discard(fire_id)
+            if detection_dates.pop(fire_id, None) is not None:
+                detection_dates_changed = True
             orphaned += 1
 
         if orphaned:
             _LOGGER.info("%d entité(s) geo_location orpheline(s) supprimée(s)", orphaned)
+
+        detection_store = getattr(self._coordinator, "_detection_store", None)
+        if detection_dates_changed and detection_store is not None:
+            serialized = {
+                fire_id: dt.isoformat() for fire_id, dt in detection_dates.items() if dt is not None
+            }
+            await detection_store.async_save(serialized)
 
 
 class FeuDeForetLocationEvent(GeolocationEvent):
@@ -284,7 +304,12 @@ class FeuDeForetLocationEvent(GeolocationEvent):
 
     _attr_should_poll = False
     _attr_unit_of_measurement = UnitOfLength.KILOMETERS
-    _attr_entity_category = EntityCategory.DIAGNOSTIC
+    # Pas de EntityCategory.DIAGNOSTIC : ces entités sont la donnée principale de
+    # l'intégration (les feux eux-mêmes), pas une information technique sur son
+    # fonctionnement interne. Le core HA ne catégorise pas non plus ses propres
+    # GeolocationEvent (GeoJSON, USGS Earthquakes, GDACS...) en diagnostic, pour les
+    # mêmes raisons : elles doivent rester visibles dans les tableaux de bord
+    # auto-générés et ne pas être reléguées dans une section repliée par défaut.
     _attr_has_entity_name = True
 
     def __init__(self, entry, fire_id, feature, dist_km, details):
