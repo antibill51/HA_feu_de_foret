@@ -4,13 +4,23 @@ Intégration non officielle pour suivre les feux de forêt en France à partir d
 
 ## Version
 
-- Version actuelle : 1.2.0
+- Version actuelle : 1.3.0
 - Première version déposée : 1.0.0
 
 ## Changelog
 
+### 1.3.0 - 2026-08-19
+- Ajout de la gestion des feux éteints : icône dédiée, attribut `eteint` et affichage distinct dans l'exemple Lovelace.
+- Ajout des attributs `etat_change_le` et `etat_change_depuis`, alimentés en priorité par la date de mise à jour fournie par feuxdeforet.fr, avec repli local si nécessaire.
+- Ajout de l'événement `feux_de_foret_fire_status_changed`, émis uniquement lorsqu'un feu change réellement de statut ou d'état, pour déclencher des automatisations ciblées.
+- Ajout de l'option `status_flap_grace_minutes` (défaut 45 min) : un feu temporairement absent du flux confirmé/en attente est conservé avant suppression, afin d'éviter les recréations et notifications en double.
+- Amélioration de la récupération des détails des feux sortis du flux pendant la période de grâce.
+- Les entités `geo_location` sont affichées comme données principales et ne sont plus classées en diagnostic.
+- Le nettoyage des feux supprimés purge également les dates de détection et les identifiants de notifications mémorisés.
+- Les réglages de rayon, intervalle de rafraîchissement et délais de grâce utilisent des curseurs dans le flux de configuration.
+- Mise à jour de l'exemple Lovelace : état éteint et ancienneté du dernier changement visibles dans les listes.
+
 ### 1.2.0 - 2026-08-04
-Corrige la suppression des entités orphelines et ajoute un délai de grâce avant indisponibilité
 - Le nettoyage des entités geo_location compare désormais l'entity registry
   au flux actuel, au lieu de se fier au seul état en mémoire du manager
   (réinitialisé à chaque redémarrage). Les feux disparus du flux pendant
@@ -20,26 +30,11 @@ Corrige la suppression des entités orphelines et ajoute un délai de grâce ava
   immédiatement toutes les entités (binary_sensor + sensors) en
   indisponible ; les dernières données connues sont conservées le temps
   du délai de grâce.
-- MiseCorrige la suppression des entités orphelines et ajoute un délai de grâce avant indisponibilité
-- Le nettoyage des entités geo_location compare désormais l'entity registry
-  au flux actuel, au lieu de se fier au seul état en mémoire du manager
-  (réinitialisé à chaque redémarrage). Les feux disparus du flux pendant
-  que l'intégration était hors ligne sont maintenant bien supprimés.
-- Ajout de l'option 'unavailable_grace_minutes' (défaut 15 min) : un échec
-  de récupération feuxdeforet.fr transitoire ne fait plus basculer
-  immédiatement toutes les entités (binary_sensor + sensors) en
-  indisponible ; les dernières données connues sont conservées le temps
-  du délai de grâce.
-Retire la catégorie diagnostic des geo_location et purge fire_detection_dates/notified_fire_ids
-- Les entités geo_location (les feux) ne sont plus catégorisées en
-  diagnostic : elles sont la donnée principale de l'intégration, pas une
-  information technique interne, et redeviennent visibles dans les
-  tableaux de bord auto-générés (cohérent avec les intégrations
-  geo_location du core HA).
-- Le nettoyage des feux orphelins purge désormais aussi
-  fire_detection_dates (persisté sur disque via le Store) et
-  notified_fire_ids, qui s'accumulaient sans limite sur le flux national.
-Modification de l'exemple lovelace.yaml.
+- Les entités geo_location ne sont plus catégorisées en diagnostic et
+  redeviennent visibles dans les tableaux de bord auto-générés.
+- Le nettoyage des feux orphelins purge aussi `fire_detection_dates` et
+  `notified_fire_ids`.
+- Mise à jour de l'exemple Lovelace.
 
 ### 1.1.1 - 2026-07-24
 - Mise à jour du README (changelog, documentation).
@@ -85,7 +80,7 @@ Modification de l'exemple lovelace.yaml.
 
 1. Ouvrir Paramètres → Appareils et services → Ajouter une intégration.
 2. Sélectionner Feux de forêt.
-3. Définir le nom de la zone, la latitude, la longitude, le rayon d'alerte et l'intervalle de rafraîchissement.
+3. Définir le nom de la zone, la latitude, la longitude, le rayon d'alerte et les options souhaitées.
 
 ## Entités créées
 
@@ -103,9 +98,34 @@ Si vous avez renommé la zone, le préfixe des entity_id change, mais les noms d
 
 ## Options utiles
 
-- Rayon d'alerte : sert à l'alerte locale, au comptage des feux à proximité et au seuil des notifications.
-- Intervalle de rafraîchissement : de 1 à 60 minutes, avec curseur et saisie directe.
-- Notifications Telegram : si un service notify est déjà configuré.
+- **Rayon d'alerte** : de 1 à 500 km; sert à l'alerte locale et au comptage des feux à proximité.
+- **Intervalle de rafraîchissement** : de 1 à 60 minutes.
+- **Délai de grâce avant indisponibilité** : de 0 à 120 minutes (défaut 15); conserve les dernières données si le site est momentanément inaccessible. `0` rétablit l'indisponibilité immédiate.
+- **Délai de grâce avant suppression** : de 0 à 180 minutes (défaut 45); conserve une entité lorsqu'un feu sort temporairement du flux confirmé/en attente. `0` rétablit la suppression immédiate.
+- **Notifications persistantes** : crée une notification Home Assistant pour chaque nouveau feu ou signalement.
+- **Distance maximale de notification** : de 0 à 500 km; `0` utilise le rayon d'alerte.
+- **Notifications Telegram** : nécessite un service `notify` Telegram déjà configuré dans Home Assistant.
+- **Journalisation détaillée** : active les logs de diagnostic de l'intégration.
+
+Les réglages du rayon, de l'intervalle et des deux délais de grâce sont proposés sous forme de curseurs dans le formulaire Home Assistant.
+
+### Automatisations sur changement d'état
+
+L'événement `feux_de_foret_fire_status_changed` est émis lorsqu'un feu change réellement d'état ou de statut. Il peut être utilisé comme déclencheur d'automatisation :
+
+```yaml
+trigger:
+  - platform: event
+    event_type: feux_de_foret_fire_status_changed
+action:
+  - service: notify.mobile_app_telephone
+    data:
+      message: >-
+        {{ trigger.event.data.commune_departement }} :
+        {{ trigger.event.data.etat_label }}
+```
+
+Les données de l'événement comprennent notamment `fire_id`, `entity_id`, `commune_departement`, `etat`, `etat_precedent`, `confirme`, `eteint`, `distance_km` et `url`.
 
 ## Lovelace
 
