@@ -18,6 +18,9 @@ _LOGGER = logging.getLogger(__name__)
 
 NOMINATIM_REVERSE_URL = "https://nominatim.openstreetmap.org/reverse"
 
+# Champ de dernière mise à jour du statut renvoyé par l'endpoint resolve.
+_UPDATE_TIMESTAMP_KEY = "updatedAt"
+
 
 def full_url(url):
     if not url:
@@ -202,7 +205,7 @@ async def _ban_reverse_request(session, lat, lng, geocode_type=None):
                 _LOGGER.debug("BAN reverse geocode (%s) returned HTTP %s", geocode_type or "default", resp.status)
                 return None
             return await resp.json(content_type=None)
-    except Exception as err: # noqa: BLE001
+    except Exception as err:  # noqa: BLE001
         _LOGGER.debug("Failed BAN reverse geocode (%s) for %s,%s: %s", geocode_type or "default", lat, lng, err)
         return None
 
@@ -238,7 +241,7 @@ async def _nominatim_reverse_request(session, lat, lng):
                 _LOGGER.debug("Nominatim reverse geocode returned HTTP %s", resp.status)
                 return None, None
             payload = await resp.json(content_type=None)
-    except Exception as err: # noqa: BLE001
+    except Exception as err:  # noqa: BLE001
         _LOGGER.debug("Failed Nominatim reverse geocode for %s,%s: %s", lat, lng, err)
         return None, None
 
@@ -249,6 +252,7 @@ async def _nominatim_reverse_request(session, lat, lng):
         address.get("city") or address.get("town") or address.get("village")
         or address.get("municipality") or address.get("county")
     )
+
     dept = _department_code_from_postcode(address.get("postcode"))
     return commune, dept
 
@@ -317,7 +321,7 @@ async def fetch_recent_signalements(session, base_url, per_page):
                 _LOGGER.debug("signalements/recent returned HTTP %s", resp.status)
                 return []
             payload = await resp.json(content_type=None)
-    except Exception as err: # noqa: BLE001
+    except Exception as err:  # noqa: BLE001
         _LOGGER.debug("Failed to fetch signalements/recent: %s", err)
         return []
 
@@ -368,7 +372,7 @@ async def async_fetch_json(session, url, timeout=15, retries=3):
                         await asyncio.sleep(2 * attempt)
                     continue
                 return await resp.json(content_type=None)
-        except Exception as err: # noqa: BLE001
+        except Exception as err:  # noqa: BLE001
             _LOGGER.debug(
                 "async_fetch_json failed for %s (essai %d/%d): %s",
                 url, attempt, retries, err,
@@ -380,14 +384,28 @@ async def async_fetch_json(session, url, timeout=15, retries=3):
     return None
 
 
-async def fetch_fire_details(session, url):
+def _parse_iso_datetime(value):
+    if not value or not isinstance(value, str):
+        return None
+    try:
+        return datetime.fromisoformat(value.replace("Z", "+00:00"))
+    except ValueError:
+        return None
+
+
+async def fetch_fire_details(session, url, fire_id=None):
     """Récupère les détails d'un feu, avec un réessai si l'API répond 500/502/503.
 
     Retourne un tuple (details, status_code). status_code vaut None en cas d'exception réseau
     (timeout, DNS, etc.), ce qui permet à l'appelant de distinguer un 404 définitif (page
     supprimée, à ne plus jamais retenter) d'un échec transitoire (à retenter plus tard).
+
+    details["updated_at"] contient la date de dernière mise à jour du statut telle que fournie
+    par feuxdeforet.fr lui-même (champ "updatedAt", confirmé stable en production) — None si
+    absente pour ce feu précis, auquel cas l'appelant (geo_location.py) se rabat sur son propre
+    suivi local.
     """
-    empty = {"date": None, "commune": None, "dept": None, "statut_detail": None}
+    empty = {"date": None, "commune": None, "dept": None, "statut_detail": None, "updated_at": None}
     path = relative_path_from_url(url)
     if not path or session is None:
         return empty, None
@@ -409,7 +427,7 @@ async def fetch_fire_details(session, url):
                     return empty, status_code
                 payload = await resp.json(content_type=None)
                 break
-        except Exception as err: # noqa: BLE001
+        except Exception as err:  # noqa: BLE001
             _LOGGER.debug("Failed to fetch fire details for %s: %s", path, err)
             return empty, None
     else:
@@ -428,12 +446,14 @@ async def fetch_fire_details(session, url):
             signal_dt = None
 
     dept = normalize_department(data.get("dept"), url=url)
+    updated_at = _parse_iso_datetime(data.get(_UPDATE_TIMESTAMP_KEY))
 
     return {
         "date": signal_dt,
         "commune": data.get("commune") or None,
         "dept": dept,
         "statut_detail": data.get("headlineEtat") or None,
+        "updated_at": updated_at,
     }, status_code
 
 

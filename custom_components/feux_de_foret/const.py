@@ -13,17 +13,16 @@ CONF_TELEGRAM_NOTIFY_SERVICE = "telegram_notify_service"
 CONF_NOTIFICATION_MAX_DISTANCE_KM = "notification_max_distance_km"
 CONF_DEBUG_LOGGING = "debug_logging"
 CONF_UNAVAILABLE_GRACE_MINUTES = "unavailable_grace_minutes"
+# Délai propre aux entités geo_location, distinct de la grâce d'indisponibilité de l'API.
+CONF_STATUS_FLAP_GRACE_MINUTES = "status_flap_grace_minutes"
 
 DEFAULT_NAME = "Feux de forêt"
 DEFAULT_RADIUS_KM = 30
 DEFAULT_SCAN_INTERVAL = 5
-# Délai pendant lequel on conserve les dernières données connues (sans faire basculer
-# les entités en "indisponible") lorsque feuxdeforet.fr ne répond pas. Le site renvoie
-# fréquemment des erreurs transitoires (500/502/503, ou payload vide) ; sans ce délai,
-# le moindre hoquet fait passer TOUTES les entités liées au coordinator (binary_sensor
-# + sensors) indisponibles simultanément, ce qui est trompeur pour un problème purement
-# passager. 0 = comportement d'origine (bascule immédiate).
+# Conservation des dernières données en cas d'erreur transitoire de l'API. 0 = immédiat.
 DEFAULT_UNAVAILABLE_GRACE_MINUTES = 15
+# Conservation d'une entité geo_location après sa sortie temporaire du flux. 0 = immédiat.
+DEFAULT_STATUS_FLAP_GRACE_MINUTES = 45
 DEFAULT_ENABLE_PERSISTENT_NOTIFICATIONS = False
 DEFAULT_ENABLE_TELEGRAM_NOTIFICATIONS = False
 DEFAULT_TELEGRAM_NOTIFY_SERVICE = ""
@@ -58,3 +57,6 @@ HTTP_USER_AGENT = (
 
 MANUFACTURER = "feuxdeforet.fr"
 MODEL = "Feux de forêt"
+
+# Émis uniquement lorsqu'un feu change réellement de statut ou d'état.
+EVENT_FIRE_STATUS_CHANGED = f"{DOMAIN}_fire_status_changed"

@@ -53,11 +53,14 @@
             state_attr('sensor.feux_de_foret_feux_en_cours_a_proximite',
             'fires') | default([], true) %}
 
-            {% for f in fires | sort(attribute='distance_km') %} - {{ '🔥' if
-            f.confirme else '⚠️' }} **{{ f.commune_departement or f.commune }}**
-            — {{ f.etat_label }} — {{ f.distance_km }} km — signalé {{
-            f.signale_depuis or 'date inconnue' }}{% if f.commune_url %}
-            [Détails]({{ f.commune_url }}){% endif %}
+            {% for f in fires | sort(attribute='distance_km') %} {% set eteint =
+            f.etat == 'eteint' or (f.etat_label and 'teint' in (f.etat_label |
+            lower)) %} - {{ '⚫' if eteint else ('🔥' if f.confirme else '⚠️') }}
+            **{{ f.commune_departement or f.commune }}** — {{ f.etat_label }} —
+            {{ f.distance_km }} km — signalé {{ f.signale_depuis or 'date
+            inconnue' }} — changement d'état {{ f.etat_change_depuis or
+            'inconnu' }}{% if f.commune_url %} [Détails]({{ f.commune_url }}){%
+            endif %}
 
 
             {% endfor %}
@@ -85,15 +88,19 @@
                   'distance': f.state | float(0),
                   'url': f.attributes.get('url'),
                   'signale_depuis': f.attributes.get('signale_depuis'),
-                  'confirme': f.attributes.get('confirme')
+                  'etat_change_depuis': f.attributes.get('etat_change_depuis'),
+                  'confirme': f.attributes.get('confirme'),
+                  'eteint': f.attributes.get('eteint', false)
                 }] %}
               {% endif %}
             {% endfor %}
 
-            {% for f in ns.items | sort(attribute='distance') %} - {{ '🔥' if
-            f.confirme else '⚠️' }} **{{ f.commune }}** — {{ f.etat_label }} —
-            {{ f.distance | round(1) }} km — signalé {{ f.signale_depuis or
-            'date inconnue' }}{% if f.url %} [Détails]({{ f.url }}){% endif %}
+            {% for f in ns.items | sort(attribute='distance') %} - {{ '⚫' if
+            f.eteint else ('🔥' if f.confirme else '⚠️') }} **{{ f.commune }}**
+            — {{ f.etat_label }} — {{ f.distance | round(1) }} km — signalé {{
+            f.signale_depuis or 'date inconnue' }} — changement d'état {{
+            f.etat_change_depuis or 'inconnu' }}{% if f.url %} [Détails]({{
+            f.url }}){% endif %}
 
 
             {% endfor %}
@@ -123,16 +130,19 @@
                   'url': f.attributes.get('url'),
                   'signale_depuis': f.attributes.get('signale_depuis'),
                   'signale_le': signale_le if signale_le else '0001-01-01T00:00:00+00:00',
-                  'confirme': f.attributes.get('confirme')
+                  'etat_change_depuis': f.attributes.get('etat_change_depuis'),
+                  'confirme': f.attributes.get('confirme'),
+                  'eteint': f.attributes.get('eteint', false)
                 }] %}
               {% endif %}
             {% endfor %}
 
             {% for f in ns.items | sort(attribute='signale_le', reverse=true) %}
-            - {{ '🔥' if f.confirme else '⚠️' }} **{{ f.commune }}** — {{
-            f.etat_label }} — {{ f.distance | round(1) }} km — signalé {{
-            f.signale_depuis or 'date inconnue' }}{% if f.url %} [Détails]({{
-            f.url }}){% endif %}
+            - {{ '⚫' if f.eteint else ('🔥' if f.confirme else '⚠️') }} **{{
+            f.commune }}** — {{ f.etat_label }} — {{ f.distance | round(1) }} km
+            — signalé {{ f.signale_depuis or 'date inconnue' }} — changement
+            d'état {{ f.etat_change_depuis or 'inconnu' }}{% if f.url %}
+            [Détails]({{ f.url }}){% endif %}
 
 
             {% endfor %}

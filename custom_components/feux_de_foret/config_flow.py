@@ -15,6 +15,7 @@ from .const import (
     CONF_NOTIFICATION_MAX_DISTANCE_KM,
     CONF_RADIUS,
     CONF_SCAN_INTERVAL,
+    CONF_STATUS_FLAP_GRACE_MINUTES,
     CONF_TELEGRAM_NOTIFY_SERVICE,
     CONF_UNAVAILABLE_GRACE_MINUTES,
     DEFAULT_DEBUG_LOGGING,
@@ -24,6 +25,7 @@ from .const import (
     DEFAULT_NOTIFICATION_MAX_DISTANCE_KM,
     DEFAULT_RADIUS_KM,
     DEFAULT_SCAN_INTERVAL,
+    DEFAULT_STATUS_FLAP_GRACE_MINUTES,
     DEFAULT_TELEGRAM_NOTIFY_SERVICE,
     DEFAULT_UNAVAILABLE_GRACE_MINUTES,
     DOMAIN,
@@ -62,6 +64,11 @@ class FeuxDeForetConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                     selector.NumberSelectorConfig(min=0, max=120, step=5,
                         mode=selector.NumberSelectorMode.SLIDER, unit_of_measurement="min")
                 ),
+            vol.Required(CONF_STATUS_FLAP_GRACE_MINUTES, default=DEFAULT_STATUS_FLAP_GRACE_MINUTES):
+                selector.NumberSelector(
+                    selector.NumberSelectorConfig(min=0, max=180, step=5,
+                        mode=selector.NumberSelectorMode.SLIDER, unit_of_measurement="min")
+                ),
             vol.Required(CONF_ENABLE_PERSISTENT_NOTIFICATIONS,
                 default=DEFAULT_ENABLE_PERSISTENT_NOTIFICATIONS): bool,
             vol.Required(CONF_ENABLE_TELEGRAM_NOTIFICATIONS,
@@ -96,6 +103,7 @@ class FeuxDeForetOptionsFlow(config_entries.OptionsFlow):
         current_name = defaults.get(CONF_NAME, DEFAULT_NAME)
         current_max_distance = defaults.get(CONF_NOTIFICATION_MAX_DISTANCE_KM, DEFAULT_NOTIFICATION_MAX_DISTANCE_KM)
         current_grace = defaults.get(CONF_UNAVAILABLE_GRACE_MINUTES, DEFAULT_UNAVAILABLE_GRACE_MINUTES)
+        current_flap_grace = defaults.get(CONF_STATUS_FLAP_GRACE_MINUTES, DEFAULT_STATUS_FLAP_GRACE_MINUTES)
 
         schema = vol.Schema({
             vol.Required(CONF_NAME, default=current_name): str,
@@ -109,6 +117,10 @@ class FeuxDeForetOptionsFlow(config_entries.OptionsFlow):
             ),
             vol.Required(CONF_UNAVAILABLE_GRACE_MINUTES, default=current_grace): selector.NumberSelector(
                 selector.NumberSelectorConfig(min=0, max=120, step=5,
+                    mode=selector.NumberSelectorMode.SLIDER, unit_of_measurement="min")
+            ),
+            vol.Required(CONF_STATUS_FLAP_GRACE_MINUTES, default=current_flap_grace): selector.NumberSelector(
+                selector.NumberSelectorConfig(min=0, max=180, step=5,
                     mode=selector.NumberSelectorMode.SLIDER, unit_of_measurement="min")
             ),
             vol.Required(CONF_ENABLE_PERSISTENT_NOTIFICATIONS,

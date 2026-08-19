@@ -82,6 +82,16 @@ class FeuxBaseSensor(FeuxDeForetEntity, SensorEntity):
             details["date"] = detected_at
         return details
 
+    def _last_state_change_for(self, fire_id):
+        """Horodatage du dernier changement réel de statut affiché pour ce feu, alimenté
+        par geo_location.py (coordinator.fire_last_state_change) — voir
+        FeuDeForetLocationEvent._maybe_fire_status_event. None si le feu n'a jamais changé
+        d'état depuis sa première apparition (l'appelant doit alors retomber sur la date de
+        signalement).
+        """
+        store = getattr(self.coordinator, "fire_last_state_change", {})
+        return store.get(fire_id)
+
     def _confirmed_with_distance(self):
         results = []
         for feature in self.coordinator.data or []:
@@ -156,6 +166,7 @@ class FeuxNearbyCountSensor(FeuxBaseSensor):
             commune = details.get("commune") or commune_from_url(p.get("url"))
             dept = details.get("dept") or department_from_url(p.get("url"))
             signal_dt = details.get("date")
+            change_dt = self._last_state_change_for(fire_id)
             nearby.append({
                 "commune": commune, "departement": dept,
                 "commune_departement": commune_with_department(commune, dept),
@@ -164,6 +175,12 @@ class FeuxNearbyCountSensor(FeuxBaseSensor):
                 "confirme": _is_confirmed(p),
                 "signale_depuis": elapsed_since(signal_dt) if signal_dt is not None else "date inconnue",
                 "signale_le": signal_dt.isoformat() if signal_dt is not None else "9999-12-31T23:59:59+00:00",
+                "etat_change_depuis": elapsed_since(change_dt) if change_dt is not None else (
+                    elapsed_since(signal_dt) if signal_dt is not None else "date inconnue"
+                ),
+                "etat_change_le": change_dt.isoformat() if change_dt is not None else (
+                    signal_dt.isoformat() if signal_dt is not None else "9999-12-31T23:59:59+00:00"
+                ),
             })
         return {"radius_km": self._radius_km, "fires": nearby}
 
@@ -226,7 +243,7 @@ class FeuxClosestSensor(FeuxBaseSensor):
         )
         if not entries:
             return {}
-        _dist, props = entries[0]
+        _, props = entries[0]
         fire_id = str(props.get("id"))
         details = self._effective_details_for(fire_id)
         commune = details.get("commune") or commune_from_url(props.get("url"))
@@ -240,6 +257,9 @@ class FeuxClosestSensor(FeuxBaseSensor):
         signal_dt = details.get("date")
         attrs["signale_le"] = signal_dt.isoformat() if signal_dt is not None else "9999-12-31T23:59:59+00:00"
         attrs["signale_depuis"] = elapsed_since(signal_dt) if signal_dt is not None else "date inconnue"
+        change_dt = self._last_state_change_for(fire_id)
+        attrs["etat_change_le"] = change_dt.isoformat() if change_dt is not None else attrs["signale_le"]
+        attrs["etat_change_depuis"] = elapsed_since(change_dt) if change_dt is not None else attrs["signale_depuis"]
         return attrs
 
 
