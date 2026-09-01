@@ -81,11 +81,16 @@ class FeuxDeForetConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
     @staticmethod
     @callback
-    def async_get_options_flow(config_entry):
-        return FeuxDeForetOptionsFlow()
+    def async_get_options_flow(config_entry: config_entries.ConfigEntry) -> config_entries.OptionsFlow:
+        return FeuxDeForetOptionsFlow(config_entry)
 
 
 class FeuxDeForetOptionsFlow(config_entries.OptionsFlow):
+    def __init__(self, config_entry: config_entries.ConfigEntry | None = None) -> None:
+        """Initialize options flow."""
+        if config_entry is not None:
+            self.config_entry = config_entry
+
     async def async_step_init(self, user_input=None):
         errors = {}
         if user_input is not None:

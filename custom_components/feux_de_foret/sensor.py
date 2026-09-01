@@ -140,11 +140,11 @@ class FeuxNearbyCountSensor(FeuxBaseSensor):
 
     _attr_icon = "mdi:fire-alert"
     _attr_native_unit_of_measurement = "feux"
+    _attr_translation_key = "nearby_count"
 
     def __init__(self, coordinator, entry):
         super().__init__(coordinator, entry)
         self._attr_unique_id = f"{entry.entry_id}_nearby_count"
-        self._attr_name = "Feux en cours à proximité"
 
     def _relevant_with_distance(self):
         """Feux confirmés et signalements en attente, avec leur distance depuis le centre."""
@@ -188,11 +188,11 @@ class FeuxNearbyCountSensor(FeuxBaseSensor):
 class FeuxConfirmedNationalSensor(FeuxBaseSensor):
     _attr_icon = "mdi:fire"
     _attr_native_unit_of_measurement = "feux"
+    _attr_translation_key = "confirmed_national"
 
     def __init__(self, coordinator, entry):
         super().__init__(coordinator, entry)
         self._attr_unique_id = f"{entry.entry_id}_confirmed_national"
-        self._attr_name = "Feux confirmés"
 
     @property
     def native_value(self):
@@ -202,11 +202,11 @@ class FeuxConfirmedNationalSensor(FeuxBaseSensor):
 class FeuxPendingNationalSensor(FeuxBaseSensor):
     _attr_icon = "mdi:fire-alert"
     _attr_native_unit_of_measurement = "feux"
+    _attr_translation_key = "pending_national"
 
     def __init__(self, coordinator, entry):
         super().__init__(coordinator, entry)
         self._attr_unique_id = f"{entry.entry_id}_pending_national"
-        self._attr_name = "Signalements en attente"
 
     @property
     def native_value(self):
@@ -224,11 +224,11 @@ class FeuxPendingNationalSensor(FeuxBaseSensor):
 class FeuxClosestSensor(FeuxBaseSensor):
     _attr_icon = "mdi:map-marker-distance"
     _attr_native_unit_of_measurement = "km"
+    _attr_translation_key = "closest_distance"
 
     def __init__(self, coordinator, entry):
         super().__init__(coordinator, entry)
         self._attr_unique_id = f"{entry.entry_id}_closest_distance"
-        self._attr_name = "Distance du feu le plus proche"
 
     @property
     def native_value(self):
@@ -267,11 +267,11 @@ class FeuxLastUpdateSensor(FeuxBaseSensor):
     _attr_icon = "mdi:clock-check-outline"
     _attr_device_class = SensorDeviceClass.TIMESTAMP
     _attr_entity_category = EntityCategory.DIAGNOSTIC
+    _attr_translation_key = "last_update"
 
     def __init__(self, coordinator, entry):
         super().__init__(coordinator, entry)
         self._attr_unique_id = f"{entry.entry_id}_last_update"
-        self._attr_name = "Dernière actualisation des données"
         self._attr_entity_registry_enabled_default = False
 
     @property

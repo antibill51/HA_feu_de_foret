@@ -42,5 +42,29 @@
         "error": {
             "telegram_service_required": "Enter a Telegram notify target or disable this option."
         }
+    },
+    "entity": {
+        "sensor": {
+            "nearby_count": {
+                "name": "Nearby active fires"
+            },
+            "confirmed_national": {
+                "name": "Confirmed fires"
+            },
+            "pending_national": {
+                "name": "Pending reports"
+            },
+            "closest_distance": {
+                "name": "Distance to closest fire"
+            },
+            "last_update": {
+                "name": "Last data update"
+            }
+        },
+        "binary_sensor": {
+            "alert": {
+                "name": "Nearby forest fire alert"
+            }
+        }
     }
 }

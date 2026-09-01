@@ -418,6 +418,8 @@ class FeuxDeForetManager:
                 fire_id, grace_period, entity_entry.entity_id,
             )
             registry.async_remove(entity_entry.entity_id)
+            if self._hass.states.get(entity_entry.entity_id) is not None:
+                self._hass.states.async_remove(entity_entry.entity_id)
             self._entities.pop(fire_id, None)
             self._details_cache.pop(fire_id, None)
             self._commune_cache.pop(fire_id, None)

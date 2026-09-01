@@ -42,5 +42,29 @@
         "error": {
             "telegram_service_required": "Indiquez un service Telegram ou désactivez cette option."
         }
+    },
+    "entity": {
+        "sensor": {
+            "nearby_count": {
+                "name": "Feux en cours à proximité"
+            },
+            "confirmed_national": {
+                "name": "Feux confirmés"
+            },
+            "pending_national": {
+                "name": "Signalements en attente"
+            },
+            "closest_distance": {
+                "name": "Distance du feu le plus proche"
+            },
+            "last_update": {
+                "name": "Dernière actualisation des données"
+            }
+        },
+        "binary_sensor": {
+            "alert": {
+                "name": "Alerte feu de forêt à proximité"
+            }
+        }
     }
 }
