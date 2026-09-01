@@ -378,12 +378,19 @@ class FeuxDeForetManager:
         to_refresh = []
         to_purge = []
         for entity_entry, fire_id in orphan_entries:
+            # Si l'entité n'est pas instanciée en mémoire (ex: restaurée après un redémarrage
+            # mais le feu était déjà clôturé/absent du flux), on la purge immédiatement pour
+            # ne jamais laisser d'entité zombie 'unavailable' dans Home Assistant.
+            entity = self._entities.get(fire_id)
+            if entity is None:
+                to_purge.append((entity_entry, fire_id))
+                continue
+
             last_seen = self._last_seen.get(fire_id)
             if last_seen is not None and (now - last_seen) < grace_period:
                 grace_protected += 1
                 if fire_id not in self._orphan_refreshed:
-                    entity = self._entities.get(fire_id)
-                    if entity is not None and entity.status_source_url:
+                    if entity.status_source_url:
                         to_refresh.append((fire_id, entity.status_source_url))
                 continue
             to_purge.append((entity_entry, fire_id))
@@ -413,9 +420,8 @@ class FeuxDeForetManager:
 
         for entity_entry, fire_id in to_purge:
             _LOGGER.debug(
-                "Feu %s absent du flux depuis plus de %s (orphelin, y compris entre deux "
-                "sessions) : suppression de %s",
-                fire_id, grace_period, entity_entry.entity_id,
+                "Feu %s absent du flux (orphelin/clôturé) : suppression de %s",
+                fire_id, entity_entry.entity_id,
             )
             registry.async_remove(entity_entry.entity_id)
             if self._hass.states.get(entity_entry.entity_id) is not None:
@@ -431,6 +437,17 @@ class FeuxDeForetManager:
             if detection_dates.pop(fire_id, None) is not None:
                 detection_dates_changed = True
             orphaned += 1
+
+        # Nettoie les éventuels états résiduels 'restored' orphelins dans hass.states
+        active_entity_ids = {ent.entity_id for ent in self._entities.values() if hasattr(ent, "entity_id")}
+        for state in self._hass.states.async_all("geo_location"):
+            if (
+                state.attributes.get("restored")
+                and state.entity_id.startswith("geo_location.feux_de_foret_")
+                and state.entity_id not in active_entity_ids
+            ):
+                _LOGGER.debug("Nettoyage de l'état résiduel orphelin %s", state.entity_id)
+                self._hass.states.async_remove(state.entity_id)
 
         if orphaned:
             _LOGGER.info("%d entité(s) geo_location orpheline(s) supprimée(s)", orphaned)
