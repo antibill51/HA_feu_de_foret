@@ -1,8 +1,12 @@
 """Sensor platform: fire counts/distance within a zone, plus diagnostic freshness sensor."""
 from __future__ import annotations
 
-from homeassistant.components.sensor import SensorDeviceClass, SensorEntity
-from homeassistant.const import EntityCategory
+from homeassistant.components.sensor import (
+    SensorDeviceClass,
+    SensorEntity,
+    SensorStateClass,
+)
+from homeassistant.const import EntityCategory, UnitOfLength
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.util import dt as dt_util
@@ -140,6 +144,7 @@ class FeuxNearbyCountSensor(FeuxBaseSensor):
 
     _attr_icon = "mdi:fire-alert"
     _attr_native_unit_of_measurement = "feux"
+    _attr_state_class = SensorStateClass.MEASUREMENT
     _attr_translation_key = "nearby_count"
 
     def __init__(self, coordinator, entry):
@@ -188,6 +193,7 @@ class FeuxNearbyCountSensor(FeuxBaseSensor):
 class FeuxConfirmedNationalSensor(FeuxBaseSensor):
     _attr_icon = "mdi:fire"
     _attr_native_unit_of_measurement = "feux"
+    _attr_state_class = SensorStateClass.MEASUREMENT
     _attr_translation_key = "confirmed_national"
 
     def __init__(self, coordinator, entry):
@@ -202,6 +208,7 @@ class FeuxConfirmedNationalSensor(FeuxBaseSensor):
 class FeuxPendingNationalSensor(FeuxBaseSensor):
     _attr_icon = "mdi:fire-alert"
     _attr_native_unit_of_measurement = "feux"
+    _attr_state_class = SensorStateClass.MEASUREMENT
     _attr_translation_key = "pending_national"
 
     def __init__(self, coordinator, entry):
@@ -223,7 +230,9 @@ class FeuxPendingNationalSensor(FeuxBaseSensor):
 
 class FeuxClosestSensor(FeuxBaseSensor):
     _attr_icon = "mdi:map-marker-distance"
-    _attr_native_unit_of_measurement = "km"
+    _attr_device_class = SensorDeviceClass.DISTANCE
+    _attr_native_unit_of_measurement = UnitOfLength.KILOMETERS
+    _attr_state_class = SensorStateClass.MEASUREMENT
     _attr_translation_key = "closest_distance"
 
     def __init__(self, coordinator, entry):
