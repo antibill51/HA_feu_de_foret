@@ -385,12 +385,22 @@ async def async_fetch_json(session, url, timeout=15, retries=3):
 
 
 def _parse_iso_datetime(value):
-    if not value or not isinstance(value, str):
+    if not value:
         return None
-    try:
-        return datetime.fromisoformat(value.replace("Z", "+00:00"))
-    except ValueError:
-        return None
+    if isinstance(value, datetime):
+        return value if value.tzinfo is not None else value.replace(tzinfo=timezone.utc)
+    if isinstance(value, (int, float)):
+        try:
+            return datetime.fromtimestamp(value, tz=timezone.utc)
+        except (ValueError, OSError):
+            return None
+    if isinstance(value, str):
+        try:
+            dt = datetime.fromisoformat(value.replace("Z", "+00:00"))
+            return dt if dt.tzinfo is not None else dt.replace(tzinfo=timezone.utc)
+        except ValueError:
+            return None
+    return None
 
 
 async def fetch_fire_details(session, url, fire_id=None):
@@ -438,13 +448,7 @@ async def fetch_fire_details(session, url, fire_id=None):
 
     data = payload.get("data", {})
     date_str = data.get("date")
-    signal_dt = None
-    if date_str:
-        try:
-            signal_dt = datetime.fromisoformat(date_str.replace("Z", "+00:00"))
-        except ValueError:
-            signal_dt = None
-
+    signal_dt = _parse_iso_datetime(date_str)
     dept = normalize_department(data.get("dept"), url=url)
     updated_at = _parse_iso_datetime(data.get(_UPDATE_TIMESTAMP_KEY))
 
@@ -460,6 +464,8 @@ async def fetch_fire_details(session, url, fire_id=None):
 def elapsed_since(dt):
     if dt is None:
         return None
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=timezone.utc)
     now = datetime.now(timezone.utc)
     delta = now - dt
     total_minutes = int(delta.total_seconds() // 60)

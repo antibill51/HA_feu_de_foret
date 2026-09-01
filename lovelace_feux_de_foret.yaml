@@ -15,7 +15,7 @@
     path: feux-de-foret
     icon: mdi:fire
     cards:
-      - type: custom:vertical-stack-in-card
+      - type: vertical-stack
         cards:
           - type: map
             geo_location_sources:
@@ -146,4 +146,4 @@
 
 
             {% endfor %}
-    type: custom:masonry-layout
+    type: masonry
