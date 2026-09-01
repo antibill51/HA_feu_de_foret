@@ -4,10 +4,18 @@ Intégration non officielle pour suivre les feux de forêt en France à partir d
 
 ## Version
 
-- Version actuelle : 1.3.0
+- Version actuelle : 1.4.0
 - Première version déposée : 1.0.0
 
 ## Changelog
+
+### 1.4.0 - 2026-09-01
+- Purge instantanée au démarrage des feux clôturés et des entités orphelines (suppression définitive des états résiduels `unavailable` après redémarrage).
+- Prise en charge des statistiques longue durée (`SensorStateClass.MEASUREMENT`, `SensorDeviceClass.DISTANCE` et unité `UnitOfLength.KILOMETERS`) sur les capteurs de proximité, nationaux et de distance.
+- Internationalisation native avec clés de traduction (`translation_key`) et support complet français/anglais.
+- Modernisation du flux d'options `FeuxDeForetOptionsFlow(config_entry)`.
+- Sécurisation du parsing des dates et de la gestion des fuseaux horaires (`datetime`).
+- Standardisation du tableau de bord d'exemple Lovelace en 100% natif Home Assistant.
 
 ### 1.3.0 - 2026-08-19
 - Ajout de la gestion des feux éteints : icône dédiée, attribut `eteint` et affichage distinct dans l'exemple Lovelace.
