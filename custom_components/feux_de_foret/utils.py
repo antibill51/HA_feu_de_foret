@@ -415,7 +415,15 @@ async def fetch_fire_details(session, url, fire_id=None):
     absente pour ce feu précis, auquel cas l'appelant (geo_location.py) se rabat sur son propre
     suivi local.
     """
-    empty = {"date": None, "commune": None, "dept": None, "statut_detail": None, "updated_at": None}
+    empty = {
+        "date": None,
+        "commune": None,
+        "dept": None,
+        "statut_detail": None,
+        "updated_at": None,
+        "excerpt": None,
+        "statut": None,
+    }
     path = relative_path_from_url(url)
     if not path or session is None:
         return empty, None
@@ -458,6 +466,8 @@ async def fetch_fire_details(session, url, fire_id=None):
         "dept": dept,
         "statut_detail": data.get("headlineEtat") or None,
         "updated_at": updated_at,
+        "excerpt": data.get("excerpt") or None,
+        "statut": data.get("statut") or None,
     }, status_code
 
 

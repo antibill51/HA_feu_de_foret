@@ -221,7 +221,15 @@ class FeuxDeForetManager:
         cached = self._details_cache.get(fire_id)
         if cached is not None:
             return cached
-        empty = {"date": None, "commune": None, "dept": None, "statut_detail": None, "updated_at": None}
+        empty = {
+            "date": None,
+            "commune": None,
+            "dept": None,
+            "statut_detail": None,
+            "updated_at": None,
+            "excerpt": None,
+            "statut": None,
+        }
 
         details = empty
         if url and fire_id not in self._permanent_failures:
@@ -292,6 +300,10 @@ class FeuxDeForetManager:
                 continue
 
             fire_id = str(props.get("id"))
+            if fire_id in self._entities:
+                prev_ent = self._entities[fire_id]
+                if prev_ent._etat != props.get("etat") or prev_ent._statut != props.get("statut"):
+                    self._details_cache.pop(fire_id, None)
             candidates.append((fire_id, feature, props, pending, lat, lng))
 
         # Les appels réseau (resolve / géocodage inverse) sont lancés en parallèle, avec un
@@ -483,6 +495,7 @@ class FeuDeForetLocationEvent(GeolocationEvent):
         self._etat = None
         self._statut_detail = None
         self._server_updated_at = None
+        self._excerpt = None
         self._last_state_change = last_state_change
         self._update_state(feature, dist_km, details, fire_event=False)
 
@@ -495,10 +508,31 @@ class FeuDeForetLocationEvent(GeolocationEvent):
         self._statut = props.get("statut")
         self._is_early = _is_early(props)
         is_pending = self._statut in PROBABLE_STATUTS
-        self._confirmed = not is_pending
+
+        # Détection de fausse alerte depuis les détails ou le statut
+        is_false_alarm = bool(
+            details.get("statut") == "fausse_alerte"
+            or (details.get("statut_detail") and "fausse alerte" in str(details.get("statut_detail")).lower())
+            or (props.get("etat") == "fausse_alerte")
+        )
+
+        # Anti-flapping / hystérésis : un feu déjà confirmé ne doit pas régresser vers "probable"
+        # en cas de désynchronisation temporaire du cache feuxdeforet.fr.
+        if self._confirmed and is_pending and not self._is_extinguished and not is_false_alarm:
+            _LOGGER.debug(
+                "Feu %s déjà confirmé (%s) : statut 'probable' transitoire ignoré (anti-rebond)",
+                self._fire_id, self._etat,
+            )
+            is_pending = False
+            self._confirmed = True
+        else:
+            self._confirmed = not is_pending
 
         previous_etat = self._etat
         previous_statut_detail = self._statut_detail
+
+        if details.get("excerpt"):
+            self._excerpt = details.get("excerpt")
 
         if is_pending:
             commune = details.get("commune") or commune_from_url(props.get("url"))
@@ -559,6 +593,8 @@ class FeuDeForetLocationEvent(GeolocationEvent):
             "etat_label": ETAT_LABELS.get(self._etat, self._etat) if self._etat else self._statut_detail,
             "statut_detail": self._statut_detail,
             "eteint": self._is_extinguished,
+            "fausse_alerte": self._is_false_alarm,
+            "motif": self._excerpt,
             "url": self._url,
             "latitude": self._latitude,
             "longitude": self._longitude,
@@ -566,7 +602,16 @@ class FeuDeForetLocationEvent(GeolocationEvent):
             "signale_depuis": self._elapsed if self._elapsed is not None else "date inconnue",
         })
 
+    @property
+    def _is_false_alarm(self):
+        statut_lower = (self._statut or "").lower()
+        detail_lower = (self._statut_detail or "").lower()
+        etat_lower = (self._etat or "").lower()
+        return "fausse_alerte" in statut_lower or "fausse alerte" in detail_lower or "fausse_alerte" in etat_lower
+
     def _icon_for_state(self):
+        if self._is_false_alarm:
+            return "mdi:shield-check"
         if self._is_extinguished:
             return "mdi:fire-off"
         if not self._confirmed:
@@ -607,6 +652,8 @@ class FeuDeForetLocationEvent(GeolocationEvent):
             self._etat = None
         if updated_at is not None:
             self._server_updated_at = updated_at
+        if details.get("excerpt"):
+            self._excerpt = details.get("excerpt")
         self._attr_icon = self._icon_for_state()
         self._maybe_fire_status_event(previous_etat, previous_statut_detail)
         self.async_write_ha_state()
@@ -617,7 +664,7 @@ class FeuDeForetLocationEvent(GeolocationEvent):
 
     @property
     def entity_picture(self):
-        if self._is_extinguished:
+        if self._is_false_alarm or self._is_extinguished:
             return FIRE_EXTINGUISHED_ICON_DATA_URI
         if not self._confirmed:
             return FIRE_PENDING_ICON_DATA_URI
@@ -642,11 +689,14 @@ class FeuDeForetLocationEvent(GeolocationEvent):
             "commune_departement": self._commune_label, "statut": self._statut,
             "confirme": self._confirmed, "anticipe": self._is_early,
             "etat": self._etat, "eteint": self._is_extinguished,
+            "fausse_alerte": self._is_false_alarm,
             "etat_label": ETAT_LABELS.get(self._etat, self._etat) if self._etat else self._statut_detail,
             "url": self._url, "id": self._fire_id,
         }
         if self._statut_detail:
             attrs["statut_detail"] = self._statut_detail
+        if self._excerpt:
+            attrs["motif"] = self._excerpt
         attrs["signale_le"] = self._signal_dt.isoformat() if self._signal_dt is not None else "9999-12-31T23:59:59+00:00"
         attrs["signale_depuis"] = self._elapsed if self._elapsed is not None else "date inconnue"
 

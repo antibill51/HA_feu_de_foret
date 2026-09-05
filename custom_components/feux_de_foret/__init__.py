@@ -49,6 +49,7 @@ from .utils import (
     async_fetch_json,
     extract_point_from_feature,
     fetch_recent_signalements,
+    relative_path_from_url,
 )
 
 _LOGGER = logging.getLogger(__name__)
@@ -126,13 +127,13 @@ def _merge_early_features(main_features, early_features):
     for feature in main_features:
         url = feature.get("properties", {}).get("url")
         if url:
-            known_urls.add(url)
+            known_urls.add(relative_path_from_url(url))
 
     merged = list(main_features)
     for feature in early_features:
         props = feature.get("properties", {})
         url = props.get("url")
-        if url and url in known_urls:
+        if url and relative_path_from_url(url) in known_urls:
             continue
         merged.append(feature)
 
