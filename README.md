@@ -4,12 +4,19 @@ Intégration non officielle pour suivre les feux de forêt en France à partir d
 
 ## Version
 
-- Version actuelle : 1.4.0
+- Version actuelle : 1.4.2
 - Première version déposée : 1.0.0
 
 ## Changelog
 
-### 1.4.0 - 2026-09-01
+### 1.4.2 - 2026-09-05
+- Correction de linting ruff (SIM102) dans `geo_location.py`.
+- Validation complète des tests GitHub Actions.
+
+### 1.4.1 - 2026-09-05
+- Anti-flapping hysteresis : évite la réversion d'un feu confirmé vers "non confirmé" lors des variations de cache.
+- Support étendu des fausses alertes avec motif extrait de l'API (/api/resolve).
+- Normalisation des URLs relatives et absolues dans `_merge_early_features`.
 - Purge instantanée au démarrage des feux clôturés et des entités orphelines (suppression définitive des états résiduels `unavailable` après redémarrage).
 - Prise en charge des statistiques longue durée (`SensorStateClass.MEASUREMENT`, `SensorDeviceClass.DISTANCE` et unité `UnitOfLength.KILOMETERS`) sur les capteurs de proximité, nationaux et de distance.
 - Internationalisation native avec clés de traduction (`translation_key`) et support complet français/anglais.

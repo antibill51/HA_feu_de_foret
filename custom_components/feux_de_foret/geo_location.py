@@ -401,9 +401,8 @@ class FeuxDeForetManager:
             last_seen = self._last_seen.get(fire_id)
             if last_seen is not None and (now - last_seen) < grace_period:
                 grace_protected += 1
-                if fire_id not in self._orphan_refreshed:
-                    if entity.status_source_url:
-                        to_refresh.append((fire_id, entity.status_source_url))
+                if fire_id not in self._orphan_refreshed and entity.status_source_url:
+                    to_refresh.append((fire_id, entity.status_source_url))
                 continue
             to_purge.append((entity_entry, fire_id))
 
