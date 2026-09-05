@@ -4,10 +4,13 @@ Intégration non officielle pour suivre les feux de forêt en France à partir d
 
 ## Version
 
-- Version actuelle : 1.4.2
+- Version actuelle : 1.4.3
 - Première version déposée : 1.0.0
 
 ## Changelog
+
+### 1.4.3 - 2026-09-05
+- Correction d'un AttributeError sur `_confirmed` lors de l'initialisation des entités `geo_location`.
 
 ### 1.4.2 - 2026-09-05
 - Correction de linting ruff (SIM102) dans `geo_location.py`.

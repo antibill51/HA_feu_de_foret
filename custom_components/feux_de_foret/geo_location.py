@@ -496,6 +496,7 @@ class FeuDeForetLocationEvent(GeolocationEvent):
         self._server_updated_at = None
         self._excerpt = None
         self._last_state_change = last_state_change
+        self._confirmed = False
         self._update_state(feature, dist_km, details, fire_event=False)
 
     def _update_state(self, feature, dist_km, details, fire_event=True):
@@ -517,7 +518,7 @@ class FeuDeForetLocationEvent(GeolocationEvent):
 
         # Anti-flapping / hystérésis : un feu déjà confirmé ne doit pas régresser vers "probable"
         # en cas de désynchronisation temporaire du cache feuxdeforet.fr.
-        if self._confirmed and is_pending and not self._is_extinguished and not is_false_alarm:
+        if getattr(self, "_confirmed", False) and is_pending and not self._is_extinguished and not is_false_alarm:
             _LOGGER.debug(
                 "Feu %s déjà confirmé (%s) : statut 'probable' transitoire ignoré (anti-rebond)",
                 self._fire_id, self._etat,
