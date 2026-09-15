@@ -4,10 +4,14 @@ Intégration non officielle pour suivre les feux de forêt en France à partir d
 
 ## Version
 
-- Version actuelle : 1.4.3
+- Version actuelle : 1.4.4
 - Première version déposée : 1.0.0
 
 ## Changelog
+
+### 1.4.4 - 2026-09-15
+- Maintien de l'anti-flapping sur les feux éteints pour éviter qu'ils ne régressent vers "Signalement non confirmé" lors des variations de cache.
+- Dédoublonnage d'événement : émission unique de l'événement `feux_de_foret_fire_status_changed` lors de l'extinction d'un feu.
 
 ### 1.4.3 - 2026-09-05
 - Correction d'un AttributeError sur `_confirmed` lors de l'initialisation des entités `geo_location`.

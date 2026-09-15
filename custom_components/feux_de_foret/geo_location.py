@@ -497,7 +497,10 @@ class FeuDeForetLocationEvent(GeolocationEvent):
         self._excerpt = None
         self._last_state_change = last_state_change
         self._confirmed = False
+        self._extinguished_event_fired = False
         self._update_state(feature, dist_km, details, fire_event=False)
+        if self._is_extinguished:
+            self._extinguished_event_fired = True
 
     def _update_state(self, feature, dist_km, details, fire_event=True):
         props = feature.get("properties", {})
@@ -518,7 +521,7 @@ class FeuDeForetLocationEvent(GeolocationEvent):
 
         # Anti-flapping / hystérésis : un feu déjà confirmé ne doit pas régresser vers "probable"
         # en cas de désynchronisation temporaire du cache feuxdeforet.fr.
-        if getattr(self, "_confirmed", False) and is_pending and not self._is_extinguished and not is_false_alarm:
+        if getattr(self, "_confirmed", False) and is_pending and not is_false_alarm:
             _LOGGER.debug(
                 "Feu %s déjà confirmé (%s) : statut 'probable' transitoire ignoré (anti-rebond)",
                 self._fire_id, self._etat,
@@ -578,9 +581,18 @@ class FeuDeForetLocationEvent(GeolocationEvent):
         """
         if previous_etat == self._etat and previous_statut_detail == self._statut_detail:
             return
+
+        # Un feu éteint ne doit émettre l'événement d'extinction qu'une seule fois
+        if self._is_extinguished:
+            if getattr(self, "_extinguished_event_fired", False):
+                return
+            self._extinguished_event_fired = True
+        else:
+            self._extinguished_event_fired = False
+
         self._last_state_change[self._fire_id] = dt_util.utcnow()
         self._hass.bus.async_fire(EVENT_FIRE_STATUS_CHANGED, {
-            "fire_id": self._fire_id,
+            "fire_id": str(self._fire_id),
             "entity_id": self.entity_id,
             "commune": self._commune,
             "departement": self._dept,
