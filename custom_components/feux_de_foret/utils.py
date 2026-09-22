@@ -3,18 +3,24 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import re
 from datetime import datetime, timezone
 from urllib.parse import quote
 
 from .const import (
     BAN_REVERSE_URL,
+    BAN_SEARCH_URL,
     BASE_URL,
     HTTP_USER_AGENT,
+    NOMINATIM_SEARCH_URL,
     PROBABLE_STATUTS,
     RESOLVE_URL,
 )
 
 _LOGGER = logging.getLogger(__name__)
+
+# Cache mémoire pour éviter les requêtes répétées de géocodage par commune
+_COMMUNE_COORDS_CACHE: dict[str, tuple[float, float] | None] = {}
 
 NOMINATIM_REVERSE_URL = "https://nominatim.openstreetmap.org/reverse"
 
@@ -279,7 +285,65 @@ async def reverse_geocode_commune(session, lat, lng):
     return await _nominatim_reverse_request(session, lat, lng)
 
 
+def fire_id_from_url(url: str | None) -> str | None:
+    """Extrait l'ID numérique canonique d'un feu depuis son URL si disponible."""
+    if not url:
+        return None
+    match = re.search(r"-(\d+)/?$", str(url).strip())
+    if match:
+        return match.group(1)
+    return None
+
+
+async def geocode_commune(session, commune: str | None, dept: str | None = None) -> tuple[float, float] | None:
+    """Géocode une commune (avec code département éventuel) via la BAN puis Nominatim."""
+    if session is None or not commune:
+        return None
+
+    cache_key = f"{str(commune).strip().lower()}_{str(dept).strip().lower() if dept else ''}"
+    if cache_key in _COMMUNE_COORDS_CACHE:
+        return _COMMUNE_COORDS_CACHE[cache_key]
+
+    query = f"{commune} {dept}".strip() if dept else str(commune).strip()
+    ban_url = f"{BAN_SEARCH_URL}?q={quote(query)}&type=municipality&limit=1"
+    try:
+        async with session.get(
+            ban_url, headers={"User-Agent": HTTP_USER_AGENT}, timeout=8
+        ) as resp:
+            if resp.status == 200:
+                payload = await resp.json(content_type=None)
+                if isinstance(payload, dict) and payload.get("features"):
+                    coords = payload["features"][0].get("geometry", {}).get("coordinates")
+                    if coords and len(coords) >= 2:
+                        lon, lat = float(coords[0]), float(coords[1])
+                        _COMMUNE_COORDS_CACHE[cache_key] = (lat, lon)
+                        return lat, lon
+    except Exception as err:  # noqa: BLE001
+        _LOGGER.debug("BAN geocode search failed for %s: %s", query, err)
+
+    nom_url = f"{NOMINATIM_SEARCH_URL}?q={quote(query)}, France&format=jsonv2&limit=1"
+    try:
+        async with session.get(
+            nom_url, headers={"User-Agent": HTTP_USER_AGENT}, timeout=8
+        ) as resp:
+            if resp.status == 200:
+                payload = await resp.json(content_type=None)
+                if isinstance(payload, list) and payload:
+                    lat_str = payload[0].get("lat")
+                    lon_str = payload[0].get("lon")
+                    if lat_str is not None and lon_str is not None:
+                        lat, lon = float(lat_str), float(lon_str)
+                        _COMMUNE_COORDS_CACHE[cache_key] = (lat, lon)
+                        return lat, lon
+    except Exception as err:  # noqa: BLE001
+        _LOGGER.debug("Nominatim geocode search failed for %s: %s", query, err)
+
+    _COMMUNE_COORDS_CACHE[cache_key] = None
+    return None
+
+
 def normalize_recent_signalement(item):
+    """Version synchrone minimale conservée pour compatibilité."""
     if not isinstance(item, dict):
         return None
 
@@ -295,7 +359,8 @@ def normalize_recent_signalement(item):
         return None
 
     raw_url = item.get("url") or item.get("link")
-    raw_id = str(item.get("id") or item.get("slug") or raw_url or item.get("title") or f"{latitude},{longitude}")
+    fire_id = fire_id_from_url(raw_url) or (str(item.get("id")) if item.get("id") else None)
+    raw_id = str(fire_id or item.get("slug") or raw_url or item.get("title") or f"{latitude},{longitude}")
 
     return {
         "type": "Feature",
@@ -305,11 +370,66 @@ def normalize_recent_signalement(item):
             "statut": PROBABLE_STATUTS[0],
             "etat": None,
             "url": raw_url,
+            "early": True,
+        },
+    }
+
+
+async def async_normalize_recent_signalement(session, item):
+    """Normalise un signalement anticipé en feature GeoJSON avec géocodage de commune."""
+    if not isinstance(item, dict):
+        return None
+
+    # Si le signalement est déjà clôturé (enCours == False), on ne le traite pas
+    if item.get("enCours") is False:
+        return None
+
+    position = item.get("position") if isinstance(item.get("position"), dict) else {}
+    latitude = _float(
+        item.get("latitude") or item.get("lat") or item.get("y") or position.get("lat")
+    )
+    longitude = _float(
+        item.get("longitude") or item.get("lng") or item.get("lon") or item.get("x")
+        or position.get("lng") or position.get("lon")
+    )
+
+    commune = item.get("commune") or item.get("city") or item.get("nom")
+    dept = item.get("dept") or item.get("departement") or item.get("dept_code")
+    raw_url = item.get("url") or item.get("link")
+
+    # Si les coordonnées ne sont pas fournies directement, géocoder la commune
+    if (latitude is None or longitude is None) and commune:
+        coords = await geocode_commune(session, str(commune), str(dept) if dept else None)
+        if coords:
+            latitude, longitude = coords
+
+    if latitude is None or longitude is None:
+        return None
+
+    fire_id = fire_id_from_url(raw_url) or (str(item.get("id")) if item.get("id") else None)
+    raw_id = str(fire_id or item.get("slug") or raw_url or item.get("title") or f"{latitude},{longitude}")
+
+    # Si on a l'ID canonique du feu (ex: 12461), on l'utilise pour une transition transparente
+    feature_id = str(fire_id) if fire_id else f"early-{raw_id}"
+
+    return {
+        "type": "Feature",
+        "geometry": {"type": "Point", "coordinates": [longitude, latitude]},
+        "properties": {
+            "id": feature_id,
+            "statut": PROBABLE_STATUTS[0],
+            "etat": None,
+            "url": raw_url,
+            "commune": commune,
+            "dept": dept,
+            "title": item.get("title"),
+            "early": True,
         },
     }
 
 
 async def fetch_recent_signalements(session, base_url, per_page):
+    """Récupère les signalements récents / anticipés et les géolocalise."""
     if session is None:
         return []
     url = f"{base_url}?per={max(1, min(per_page, 100))}"
@@ -331,11 +451,14 @@ async def fetch_recent_signalements(session, base_url, per_page):
     if not isinstance(items, list):
         return []
 
+    results = await asyncio.gather(
+        *(async_normalize_recent_signalement(session, item) for item in items),
+        return_exceptions=True,
+    )
     features = []
-    for item in items:
-        feature = normalize_recent_signalement(item)
-        if feature is not None:
-            features.append(feature)
+    for res in results:
+        if isinstance(res, dict) and res.get("type") == "Feature":
+            features.append(res)
     return features
 
 

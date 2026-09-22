@@ -124,16 +124,24 @@ def _merge_early_features(main_features, early_features):
         return main_features
 
     known_urls = set()
+    known_ids = set()
     for feature in main_features:
-        url = feature.get("properties", {}).get("url")
+        props = feature.get("properties", {})
+        url = props.get("url")
         if url:
             known_urls.add(relative_path_from_url(url))
+        f_id = props.get("id")
+        if f_id:
+            known_ids.add(str(f_id))
 
     merged = list(main_features)
     for feature in early_features:
         props = feature.get("properties", {})
         url = props.get("url")
+        f_id = str(props.get("id")) if props.get("id") else None
         if url and relative_path_from_url(url) in known_urls:
+            continue
+        if f_id and f_id in known_ids:
             continue
         merged.append(feature)
 

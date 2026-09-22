@@ -74,7 +74,7 @@ def _is_pending(props):
 
 
 def _is_early(props):
-    return str(props.get("id", "")).startswith("early-")
+    return str(props.get("id", "")).startswith("early-") or bool(props.get("early"))
 
 
 def _serialize_datetime_dict(values):
@@ -269,8 +269,10 @@ class FeuxDeForetManager:
             return None
         return details
 
-    async def _resolve_details(self, fire_id, pending, url, lat, lng):
+    async def _resolve_details(self, fire_id, pending, url, lat, lng, commune=None, dept=None):
         if pending:
+            if commune:
+                return fire_id, {"commune": commune, "dept": dept}
             return fire_id, await self._get_pending_commune(fire_id, lat, lng)
         return fire_id, await self._get_details(fire_id, url, lat, lng)
 
@@ -311,7 +313,10 @@ class FeuxDeForetManager:
         # création des entités ci-dessous.
         results = await asyncio.gather(
             *(
-                self._resolve_details(fire_id, pending, props.get("url"), lat, lng)
+                self._resolve_details(
+                    fire_id, pending, props.get("url"), lat, lng,
+                    props.get("commune"), props.get("dept"),
+                )
                 for fire_id, feature, props, pending, lat, lng in candidates
             ),
             return_exceptions=True,
@@ -538,14 +543,14 @@ class FeuDeForetLocationEvent(GeolocationEvent):
             self._excerpt = details.get("excerpt")
 
         if is_pending:
-            commune = details.get("commune") or commune_from_url(props.get("url"))
-            dept = details.get("dept") or department_from_url(props.get("url"))
+            commune = details.get("commune") or props.get("commune") or commune_from_url(props.get("url"))
+            dept = details.get("dept") or props.get("dept") or department_from_url(props.get("url"))
             self._commune = commune
             self._dept = dept
             self._commune_label = commune_with_department(commune, dept)
             self._etat = None
             self._statut_detail = STATUT_EARLY_LABEL if self._is_early else STATUT_PROBABLE_LABEL
-            self._url = full_url(props.get("url")) if self._is_early else None
+            self._url = full_url(props.get("url"))
             self._signal_dt = details.get("date")
         else:
             commune = details.get("commune") or commune_from_url(props.get("url"))

@@ -34,6 +34,8 @@ RESOLVE_URL = "https://feuxdeforet.fr/api/resolve"
 RECENT_SIGNALEMENTS_URL = "https://feuxdeforet.fr/api/signalements/recent"
 DEFAULT_RECENT_PER_PAGE = 50
 BAN_REVERSE_URL = "https://api-adresse.data.gouv.fr/reverse/"
+BAN_SEARCH_URL = "https://api-adresse.data.gouv.fr/search/"
+NOMINATIM_SEARCH_URL = "https://nominatim.openstreetmap.org/search"
 
 ONGOING_STATUTS = ("valide_publie",)
 PROBABLE_STATUTS = ("probable",)
