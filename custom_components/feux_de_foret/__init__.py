@@ -261,6 +261,12 @@ async def _async_notify_new_fires(hass, entry, coordinator, features):
 
     for feature in features:
         props = feature.get("properties", {})
+        if (
+            props.get("enCours") is False
+            or props.get("statut") in ("fausse_alerte", "eteint")
+            or props.get("etat") in ("fausse_alerte", "eteint")
+        ):
+            continue
         confirmed = _is_confirmed(props)
         pending = _is_pending(props)
         if not confirmed and not pending:

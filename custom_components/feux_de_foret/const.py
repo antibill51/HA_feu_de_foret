@@ -38,13 +38,15 @@ BAN_SEARCH_URL = "https://api-adresse.data.gouv.fr/search/"
 NOMINATIM_SEARCH_URL = "https://nominatim.openstreetmap.org/search"
 
 ONGOING_STATUTS = ("valide_publie",)
-PROBABLE_STATUTS = ("probable",)
+PROBABLE_STATUTS = ("probable", "douteux")
 ONGOING_ETATS = ("attaque", "fixe", "maitrise")
 
 ETAT_LABELS = {
     "attaque": "Attaque en cours",
     "fixe": "Fixé",
     "maitrise": "Maîtrisé",
+    "eteint": "Éteint",
+    "fausse_alerte": "Fausse alerte",
 }
 
 STATUT_PROBABLE_LABEL = "Signalement en attente de confirmation"

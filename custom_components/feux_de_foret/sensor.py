@@ -1,4 +1,4 @@
-"""Sensor platform: fire counts/distance within a zone, plus diagnostic freshness sensor."""
+"""Sensor platform for Feux de forêt."""
 from __future__ import annotations
 
 from homeassistant.components.sensor import (
@@ -9,13 +9,14 @@ from homeassistant.components.sensor import (
 from homeassistant.const import EntityCategory, UnitOfLength
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
-from homeassistant.util import dt as dt_util
+from homeassistant.helpers.update_coordinator import CoordinatorEntity
 from homeassistant.util.location import distance
 
 from .const import (
     CONF_LATITUDE,
     CONF_LONGITUDE,
     CONF_RADIUS,
+    DEFAULT_RADIUS_KM,
     DOMAIN,
     ETAT_LABELS,
     ONGOING_ETATS,
@@ -24,7 +25,7 @@ from .const import (
     STATUT_EARLY_LABEL,
     STATUT_PROBABLE_LABEL,
 )
-from .entity import FeuxDeForetEntity
+from .entity import device_info_for
 from .utils import (
     commune_from_url,
     commune_with_department,
@@ -35,16 +36,21 @@ from .utils import (
 )
 
 
-def _is_early(props):
-    return str(props.get("id", "")).startswith("early-")
-
-
 def _is_confirmed(props):
     return props.get("statut") in ONGOING_STATUTS and props.get("etat") in ONGOING_ETATS
 
 
 def _is_pending(props):
     return props.get("statut") in PROBABLE_STATUTS
+
+
+def _is_early(props):
+    return (
+        str(props.get("id", "")).startswith("early-")
+        or bool(props.get("early"))
+        or props.get("statut") in ("douteux", "probable")
+        or bool(props.get("anticipe"))
+    )
 
 
 async def async_setup_entry(hass: HomeAssistant, entry, async_add_entities: AddEntitiesCallback):
@@ -58,10 +64,13 @@ async def async_setup_entry(hass: HomeAssistant, entry, async_add_entities: AddE
     ])
 
 
-class FeuxBaseSensor(FeuxDeForetEntity, SensorEntity):
-    @property
-    def _radius_km(self):
-        return self._entry.options.get(CONF_RADIUS, self._entry.data.get(CONF_RADIUS, 30))
+class FeuxBaseSensor(CoordinatorEntity, SensorEntity):
+    _attr_has_entity_name = True
+
+    def __init__(self, coordinator, entry):
+        super().__init__(coordinator)
+        self._entry = entry
+        self._attr_device_info = device_info_for(entry)
 
     @property
     def _home_lat(self):
@@ -71,20 +80,23 @@ class FeuxBaseSensor(FeuxDeForetEntity, SensorEntity):
     def _home_lng(self):
         return self._entry.data.get(CONF_LONGITUDE)
 
-    def _details_for(self, fire_id):
-        cache = getattr(self.coordinator, "fire_details", {})
-        return cache.get(fire_id, {})
+    @property
+    def _radius_km(self):
+        return self._entry.options.get(CONF_RADIUS, self._entry.data.get(CONF_RADIUS, DEFAULT_RADIUS_KM))
 
     def _effective_details_for(self, fire_id):
-        details = dict(self._details_for(fire_id) or {})
-        if details.get("date") is None:
-            detection_dates = getattr(self.coordinator, "fire_detection_dates", {})
-            detected_at = detection_dates.get(fire_id)
-            if detected_at is None:
-                detected_at = dt_util.utcnow()
-                detection_dates[fire_id] = detected_at
-            details["date"] = detected_at
-        return details
+        """Récupère les détails depuis le coordinateur ou le cache de commune."""
+        details = getattr(self.coordinator, "fire_details", {}).get(fire_id)
+        if details is not None:
+            return details
+        commune_info = getattr(self.coordinator, "commune_cache", {}).get(fire_id, {})
+        detection_dates = getattr(self.coordinator, "fire_detection_dates", {})
+        return {
+            "date": detection_dates.get(fire_id),
+            "commune": commune_info.get("commune"),
+            "dept": commune_info.get("dept"),
+            "statut_detail": None,
+        }
 
     def _last_state_change_for(self, fire_id):
         """Horodatage du dernier changement réel de statut affiché pour ce feu, alimenté
@@ -102,6 +114,12 @@ class FeuxBaseSensor(FeuxDeForetEntity, SensorEntity):
             props = feature.get("properties", {})
             if not _is_confirmed(props):
                 continue
+            if (
+                props.get("enCours") is False
+                or props.get("etat") in ("eteint", "fausse_alerte")
+                or props.get("statut") in ("fausse_alerte", "eteint")
+            ):
+                continue
             lat, lng = extract_point_from_feature(feature)
             if lat is None or lng is None:
                 continue
@@ -115,6 +133,12 @@ class FeuxBaseSensor(FeuxDeForetEntity, SensorEntity):
         for feature in self.coordinator.data or []:
             props = feature.get("properties", {})
             if not (_is_confirmed(props) or _is_pending(props)):
+                continue
+            if (
+                props.get("enCours") is False
+                or props.get("etat") in ("eteint", "fausse_alerte")
+                or props.get("statut") in ("fausse_alerte", "eteint")
+            ):
                 continue
             lat, lng = extract_point_from_feature(feature)
             if lat is None or lng is None:
@@ -217,13 +241,23 @@ class FeuxPendingNationalSensor(FeuxBaseSensor):
 
     @property
     def native_value(self):
-        return sum(1 for f in self.coordinator.data or [] if _is_pending(f.get("properties", {})))
+        return sum(
+            1 for f in self.coordinator.data or []
+            if _is_pending(f.get("properties", {}))
+            and f.get("properties", {}).get("enCours") is not False
+            and f.get("properties", {}).get("statut") != "fausse_alerte"
+            and f.get("properties", {}).get("etat") != "fausse_alerte"
+        )
 
     @property
     def extra_state_attributes(self):
         anticipes = sum(
             1 for f in self.coordinator.data or []
-            if _is_pending(f.get("properties", {})) and _is_early(f.get("properties", {}))
+            if _is_pending(f.get("properties", {}))
+            and _is_early(f.get("properties", {}))
+            and f.get("properties", {}).get("enCours") is not False
+            and f.get("properties", {}).get("statut") != "fausse_alerte"
+            and f.get("properties", {}).get("etat") != "fausse_alerte"
         )
         return {"dont_signalements_anticipes": anticipes}
 
