@@ -12,13 +12,11 @@ from .const import (
     BAN_REVERSE_URL,
     BAN_SEARCH_URL,
     BASE_URL,
-    ETAT_LABELS,
     HTTP_USER_AGENT,
     NOMINATIM_SEARCH_URL,
     PROBABLE_STATUTS,
     RESOLVE_URL,
     STATUT_EARLY_LABEL,
-    STATUT_PROBABLE_LABEL,
 )
 
 _LOGGER = logging.getLogger(__name__)
@@ -232,7 +230,7 @@ def full_url(url):
     if not url:
         return None
     url = url.strip()
-    if url.startswith("http://") or url.startswith("https://"):
+    if url.startswith(("http://", "https://")):
         return url
     path = url if url.startswith("/") else f"/{url}"
     return f"{BASE_URL}{path}"
@@ -403,7 +401,7 @@ def normalize_recent_signalement(item):
             "statut_detail": statut_detail,
             "url": raw_url,
             "title": title,
-            "early": True if en_cours is not False else False,
+            "early": en_cours is not False,
             "enCours": en_cours,
         },
     }
@@ -484,7 +482,7 @@ async def async_normalize_recent_signalement(session, item):
             "commune": commune,
             "dept": dept,
             "title": title,
-            "early": True if en_cours is not False else False,
+            "early": en_cours is not False,
             "enCours": en_cours,
         },
     }

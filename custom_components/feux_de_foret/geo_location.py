@@ -304,9 +304,8 @@ class FeuxDeForetManager:
                 or props.get("etat") in ("fausse_alerte", "eteint")
             )
 
-            if not confirmed and not pending:
-                if not (is_closed and fire_id in self._entities):
-                    continue
+            if not confirmed and not pending and not (is_closed and fire_id in self._entities):
+                continue
 
             lat, lng = extract_point_from_feature(feature)
             if lat is None or lng is None:
